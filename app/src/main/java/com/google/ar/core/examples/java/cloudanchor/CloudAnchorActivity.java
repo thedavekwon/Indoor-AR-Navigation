@@ -18,12 +18,15 @@ package com.google.ar.core.examples.java.cloudanchor;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.util.ArraySet;
 import android.util.Log;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.TextView;
@@ -31,6 +34,9 @@ import android.widget.Toast;
 import androidx.annotation.GuardedBy;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.DialogFragment;
+
+import com.google.android.filament.gltfio.Animator;
+import com.google.android.filament.gltfio.FilamentAsset;
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Anchor.CloudAnchorState;
 import com.google.ar.core.ArCoreApk;
@@ -62,16 +68,35 @@ import com.google.ar.core.exceptions.CameraNotAvailableException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
+import com.google.ar.sceneform.AnchorNode;
+import com.google.ar.sceneform.FrameTime;
+import com.google.ar.sceneform.HitTestResult;
+import com.google.ar.sceneform.Node;
+import com.google.ar.sceneform.Scene;
+import com.google.ar.sceneform.math.Quaternion;
+import com.google.ar.sceneform.math.Vector3;
+import com.google.ar.sceneform.rendering.Color;
+import com.google.ar.sceneform.rendering.Material;
+import com.google.ar.sceneform.rendering.MaterialFactory;
+import com.google.ar.sceneform.rendering.ModelRenderable;
+import com.google.ar.sceneform.rendering.Renderable;
+import com.google.ar.sceneform.rendering.ShapeFactory;
+import com.google.ar.sceneform.rendering.ViewRenderable;
+import com.google.ar.sceneform.ux.ArFragment;
+import com.google.ar.sceneform.ux.TransformableNode;
 import com.google.common.base.Preconditions;
 import com.google.firebase.database.DatabaseError;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Set;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 public class CloudAnchorActivity extends AppCompatActivity
-    implements GLSurfaceView.Renderer, NoticeDialogListener {
+    implements NoticeDialogListener {
   private static final String TAG = CloudAnchorActivity.class.getSimpleName();
   private static final float[] OBJECT_COLOR = new float[] {139.0f, 195.0f, 74.0f, 255.0f};
 
@@ -118,6 +143,10 @@ public class CloudAnchorActivity extends AppCompatActivity
 
   @GuardedBy("singleTapLock")
   private MotionEvent queuedSingleTap;
+  @GuardedBy("singleTapLock")
+  private Boolean wasTappedThisFrame = false;
+
+  private Renderable waypointRenderable;
 
   private Session session;
 
@@ -125,6 +154,12 @@ public class CloudAnchorActivity extends AppCompatActivity
   private Anchor anchor;
   @GuardedBy("anchorsLock")
   private ArrayList<Anchor> anchors = new ArrayList<Anchor>();
+  @GuardedBy("anchorsLock")
+  private ArrayList<AnchorNode> anchorNodes = new ArrayList<AnchorNode>();
+
+  private ArFragment arFragment;
+
+  private Boolean wasNullSession = true;
 
   // Cloud Anchor Components.
   private FirebaseManager firebaseManager;
@@ -132,43 +167,59 @@ public class CloudAnchorActivity extends AppCompatActivity
   private HostResolveMode currentMode;
   private RoomCodeAndCloudAnchorIdListener hostListener;
 
+  private final Set<AnimationInstance> animators = new ArraySet<>();
+  private Node waypointNode;
+  private static class AnimationInstance {
+    Animator animator;
+    Long startTime;
+    float duration;
+    int index;
+
+    AnimationInstance(Animator animator, int index, Long startTime) {
+      this.animator = animator;
+      this.startTime = startTime;
+      this.duration = animator.getAnimationDuration(index);
+      this.index = index;
+    }
+  }
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
-    surfaceView = findViewById(R.id.surfaceview);
+    //surfaceView = findViewById(R.id.surfaceview);
     displayRotationHelper = new DisplayRotationHelper(this);
 
-    // Set up touch listener.
-    gestureDetector =
-        new GestureDetector(
-            this,
-            new GestureDetector.SimpleOnGestureListener() {
-              @Override
-              public boolean onSingleTapUp(MotionEvent e) {
-                synchronized (singleTapLock) {
-                  if (currentMode == HostResolveMode.HOSTING) {
-                    queuedSingleTap = e;
-                  }
-                }
-                return true;
-              }
 
-              @Override
-              public boolean onDown(MotionEvent e) {
-                return true;
-              }
-            });
-    surfaceView.setOnTouchListener((v, event) -> gestureDetector.onTouchEvent(event));
+    arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
+    initializeScene(arFragment.getArSceneView().getScene());
+    waypointNode = new Node();
 
-    // Set up renderer.
-    surfaceView.setPreserveEGLContextOnPause(true);
-    surfaceView.setEGLContextClientVersion(2);
-    surfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0); // Alpha used for plane blending.
-    surfaceView.setRenderer(this);
-    surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-    surfaceView.setWillNotDraw(false);
-    installRequested = false;
+    WeakReference<CloudAnchorActivity> weakActivity = new WeakReference<>(this);
+
+    ModelRenderable.builder()
+            .setSource(
+                    this,
+                    Uri.parse(
+                            "https://storage.googleapis.com/ar-answers-in-search-models/static/Tiger/model.glb"))
+            .setIsFilamentGltf(true)
+            .build()
+            .thenAccept(
+                    modelRenderable -> {
+                      CloudAnchorActivity activity = weakActivity.get();
+                      if (activity != null) {
+                        activity.waypointRenderable = modelRenderable;
+                      }
+                    })
+            .exceptionally(
+                    throwable -> {
+                      Toast toast =
+                              Toast.makeText(this, "Unable to load Waypoint renderable", Toast.LENGTH_LONG);
+                      toast.setGravity(Gravity.CENTER, 0, 0);
+                      toast.show();
+                      return null;
+                    });
+
 
     // Initialize UI components.
     hostButton = findViewById(R.id.host_button);
@@ -181,6 +232,92 @@ public class CloudAnchorActivity extends AppCompatActivity
     firebaseManager = new FirebaseManager(this);
     currentMode = HostResolveMode.NONE;
     sharedPreferences = getSharedPreferences(PREFERENCE_FILE_KEY, Context.MODE_PRIVATE);
+  }
+
+  private void initializeScene(Scene scene) {
+    scene.setOnTouchListener(this::onTap);
+    scene.addOnUpdateListener(this::onFrame);
+
+    if(arFragment.getArSceneView().getSession() == null)
+    {
+      System.out.println("It null");
+      return;
+    }
+    Config config = new Config(arFragment.getArSceneView().getSession());
+    config.setCloudAnchorMode(CloudAnchorMode.ENABLED);
+    arFragment.getArSceneView().getSession().configure(config);
+  }
+
+  private boolean onTap(HitTestResult hitTestResult, MotionEvent motionEvent) {
+
+    synchronized (singleTapLock) {
+      synchronized (anchorLock) {
+        if(wasTappedThisFrame)
+          return false;
+        else
+          wasTappedThisFrame = true;
+        // Only process taps when hosting.
+        if (currentMode != HostResolveMode.HOSTING) {
+          return false;
+        }
+
+        Frame frame = arFragment.getArSceneView().getArFrame();
+        TrackingState cameraTrackingState = frame.getCamera().getTrackingState();
+        // Only handle a tap if the anchor is currently null, the queued tap is non-null and the
+        // camera is currently tracking.
+        if (motionEvent != null && cameraTrackingState == TrackingState.TRACKING) {
+          Preconditions.checkState(
+                  currentMode == HostResolveMode.HOSTING,
+                  "We should only be creating an anchor in hosting mode.");
+          for (HitResult hit : frame.hitTest(motionEvent)) {
+            if (shouldCreateAnchorWithHit(hit)) {
+              Anchor newAnchor = hit.createAnchor();
+
+              System.out.println("Cloud Anchor Mode: " + arFragment.getArSceneView().getSession().getConfig().getCloudAnchorMode());
+              cloudManager.hostCloudAnchor(newAnchor, hostListener);
+              System.out.println("boop");
+
+              return true; // Only handle the first valid hit.
+            }
+          }
+        }
+        return false;
+      }
+    }
+  }
+
+  private void onFrame(FrameTime frameTime) {
+    arFragment.onUpdate(frameTime);
+    Frame frame = arFragment.getArSceneView().getArFrame();
+
+    if (frame == null) {
+      return;
+    }
+
+    Camera camera = frame.getCamera();
+    TrackingState cameraTrackingState = camera.getTrackingState();
+
+    if(wasNullSession && arFragment.getArSceneView().getSession()!=null)
+    {
+      System.out.println("NOT NULL");
+      Config config = arFragment.getArSceneView().getSession().getConfig(); //new Config(arFragment.getArSceneView().getSession());
+
+      config.setCloudAnchorMode(CloudAnchorMode.ENABLED);
+
+      arFragment.getArSceneView().getSession().configure(config);
+      wasNullSession = false;
+    }
+
+
+    cloudManager.setSession(arFragment.getArSceneView().getSession());
+    // Notify the cloudManager of all the updates.
+    cloudManager.onUpdate();
+
+    // If not tracking, don't draw 3d objects.
+    if (cameraTrackingState == TrackingState.PAUSED) {
+      return;
+    }
+    wasTappedThisFrame=false;
   }
 
   @Override
@@ -204,13 +341,14 @@ public class CloudAnchorActivity extends AppCompatActivity
   protected void onResume() {
     super.onResume();
 
-    if (sharedPreferences.getBoolean(ALLOW_SHARE_IMAGES_KEY, false)) {
-      createSession();
+    // Setting the session in the HostManager.
+    cloudManager.setSession(arFragment.getArSceneView().getSession());
+
+    if (currentMode == HostResolveMode.NONE) {
+      snackbarHelper.showMessage(this, getString(R.string.snackbar_initial_message));
     }
-    snackbarHelper.showMessage(this, getString(R.string.snackbar_initial_message));
-    surfaceView.onResume();
-    displayRotationHelper.onResume();
   }
+
 
   private void createSession() {
     if (session == null) {
@@ -278,7 +416,7 @@ public class CloudAnchorActivity extends AppCompatActivity
       // to query the session. If Session is paused before GLSurfaceView, GLSurfaceView may
       // still call session.update() and get a SessionPausedException.
       displayRotationHelper.onPause();
-      surfaceView.onPause();
+      //surfaceView.onPause();
       session.pause();
     }
   }
@@ -353,147 +491,16 @@ public class CloudAnchorActivity extends AppCompatActivity
     return false;
   }
 
-  @Override
-  public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-    GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-
-    // Prepare the rendering objects. This involves reading shaders, so may throw an IOException.
-    try {
-      // Create the texture and pass it to ARCore session to be filled during update().
-      backgroundRenderer.createOnGlThread(this);
-      planeRenderer.createOnGlThread(this, "models/trigrid.png");
-      pointCloudRenderer.createOnGlThread(this);
-
-      virtualObject.createOnGlThread(this, "models/andy.obj", "models/andy.png");
-      virtualObject.setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
-      Log.i("context", this.toString());
-      virtualObjectShadow.createOnGlThread(
-          this, "models/andy_shadow.obj", "models/andy_shadow.png");
-      virtualObjectShadow.setBlendMode(BlendMode.Shadow);
-      virtualObjectShadow.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
-
-      for (int i = 0; i < anchors.size(); i++) {
-        virtualObjects.get(i).createOnGlThread(this, "models/andy.obj", "models/andy.png");
-        virtualObjects.get(i).setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
-        virtualObjectShadows.get(i).createOnGlThread(
-                this, "models/andy_shadow.obj", "models/andy_shadow.png");
-        virtualObjectShadows.get(i).setBlendMode(BlendMode.Shadow);
-        virtualObjectShadows.get(i).setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
-      }
-
-    } catch (IOException ex) {
-      Log.e(TAG, "Failed to read an asset file", ex);
-    }
-  }
-
-  @Override
-  public void onSurfaceChanged(GL10 gl, int width, int height) {
-    displayRotationHelper.onSurfaceChanged(width, height);
-    GLES20.glViewport(0, 0, width, height);
-  }
-
-  @Override
-  public void onDrawFrame(GL10 gl) {
-    // Clear screen to notify driver it should not load any pixels from previous frame.
-    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
-
-    if (session == null) {
-      return;
-    }
-    // Notify ARCore session that the view size changed so that the perspective matrix and
-    // the video background can be properly adjusted.
-    displayRotationHelper.updateSessionIfNeeded(session);
-
-    try {
-      session.setCameraTextureName(backgroundRenderer.getTextureId());
-
-      // Obtain the current frame from ARSession. When the configuration is set to
-      // UpdateMode.BLOCKING (it is by default), this will throttle the rendering to the
-      // camera framerate.
-      Frame frame = session.update();
-      Camera camera = frame.getCamera();
-      TrackingState cameraTrackingState = camera.getTrackingState();
-
-      // Notify the cloudManager of all the updates.
-      cloudManager.onUpdate();
-
-      // Handle user input.
-      handleTap(frame, cameraTrackingState);
-
-      // If frame is ready, render camera preview image to the GL surface.
-      backgroundRenderer.draw(frame);
-
-      // Keep the screen unlocked while tracking, but allow it to lock when tracking stops.
-      trackingStateHelper.updateKeepScreenOnFlag(camera.getTrackingState());
-
-      // If not tracking, don't draw 3d objects.
-      if (cameraTrackingState == TrackingState.PAUSED) {
-        return;
-      }
-
-      // Get camera and projection matrices.
-      camera.getViewMatrix(viewMatrix, 0);
-      camera.getProjectionMatrix(projectionMatrix, 0, 0.1f, 100.0f);
-
-      // Visualize tracked points.
-      // Use try-with-resources to automatically release the point cloud.
-      try (PointCloud pointCloud = frame.acquirePointCloud()) {
-        pointCloudRenderer.update(pointCloud);
-        pointCloudRenderer.draw(viewMatrix, projectionMatrix);
-      }
-
-      // Visualize planes.
-      planeRenderer.drawPlanes(
-          session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projectionMatrix);
-
-      // Check if the anchor can be visualized or not, and get its pose if it can be.
-      boolean shouldDrawAnchor = false;
-      synchronized (anchorLock) {
-        if (anchor != null && anchor.getTrackingState() == TrackingState.TRACKING) {
-          // Get the current pose of an Anchor in world space. The Anchor pose is updated
-          // during calls to session.update() as ARCore refines its estimate of the world.
-          anchor.getPose().toMatrix(anchorMatrix, 0);
-          shouldDrawAnchor = true;
-        }
-      }
-
-
-      float scaleFactor = 1.0f;
-      float[] colorCorrectionRgba = new float[4];
-      frame.getLightEstimate().getColorCorrection(colorCorrectionRgba, 0);
-
-      // Visualize anchor.
-      if (shouldDrawAnchor) {
-        virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
-        virtualObjectShadow.updateModelMatrix(anchorMatrix, scaleFactor);
-        virtualObject.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, OBJECT_COLOR);
-        virtualObjectShadow.draw(viewMatrix, projectionMatrix, colorCorrectionRgba, OBJECT_COLOR);
-      }
-      synchronized (anchorsLock) {
-        for (int i = 0; i < anchors.size(); i++) {
-          anchors.get(i).getPose().toMatrix(anchorMatrices.get(i), 0);
-          virtualObjects.get(i).updateModelMatrix(anchorMatrices.get(i), scaleFactor);
-          virtualObjectShadows.get(i).updateModelMatrix(anchorMatrices.get(i), scaleFactor);
-          virtualObjects.get(i).draw(viewMatrix, projectionMatrix, colorCorrectionRgba, OBJECT_COLOR);
-          virtualObjectShadows.get(i).draw(viewMatrix, projectionMatrix, colorCorrectionRgba, OBJECT_COLOR);
-        }
-      }
-
-
-
-    } catch (Throwable t) {
-      // Avoid crashing the application due to unhandled exceptions.
-      Log.e(TAG, "Exception on the OpenGL thread", t);
-    }
-  }
-
   /** Sets the new value of the current anchor. Detaches the old anchor, if it was non-null. */
   private void setNewAnchor(Anchor newAnchor) {
     synchronized (anchorLock) {
-      if (anchor != null) {
+      /*if (anchor != null) {
         anchor.detach();
       }
       anchor = newAnchor;
+       */
+      if(newAnchor != null)
+        newAddAnchorToList(newAnchor);
     }
   }
 
@@ -567,6 +574,85 @@ public class CloudAnchorActivity extends AppCompatActivity
     cloudManager.clearListeners();
   }
 
+  private void renderPath(){
+    if(anchorNodes.size() < 2)
+      return;
+    else {
+      for(int i = 1; i < anchorNodes.size(); i++){
+        renderLineBetweenTwoAnchorNodes(anchorNodes.get(i - 1), anchorNodes.get(i));
+
+        if(i == anchorNodes.size() - 1){
+          renderWaypoint(anchorNodes.get(i));
+        }
+      }
+    }
+  }
+
+  private void renderWaypoint(AnchorNode anchorNode){
+    // Create the transformable model and add it to the anchor.
+    waypointNode.setParent(anchorNode);
+    waypointNode.setRenderable(waypointRenderable);
+    waypointNode.setLocalScale(new Vector3(.2f,.2f,.2f));
+
+
+    FilamentAsset filamentAsset = waypointNode.getRenderableInstance().getFilamentAsset();
+    if (filamentAsset.getAnimator().getAnimationCount() > 0) {
+      animators.add(new AnimationInstance(filamentAsset.getAnimator(), 0, System.nanoTime()));
+    }
+
+    Color color = new Color(0, 0, 0, 1);
+    for (int i = 0; i < waypointRenderable.getSubmeshCount(); ++i) {
+      Material material = waypointRenderable.getMaterial(i);
+      material.setFloat4("baseColorFactor", color);
+    }
+  }
+  private void renderLineBetweenTwoAnchorNodes(AnchorNode prev, AnchorNode curr){
+    Vector3 point1 = curr.getWorldPosition();
+    Vector3 point2 = prev.getWorldPosition();
+
+    Node lineNode = new Node();
+
+    /* First, find the vector extending between the two points and define a look rotation in terms of this
+        Vector. */
+
+    final Vector3 difference = Vector3.subtract(point1, point2);
+    final Vector3 directionFromTopToBottom = difference.normalized();
+    final Quaternion rotationFromAToB =
+            Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
+
+         /* Then, create a rectangular prism, using ShapeFactory.makeCube() and use the difference vector
+         to extend to the necessary length.  */
+    MaterialFactory.makeOpaqueWithColor(getApplicationContext(), new Color(0, 255, 244))
+            .thenAccept(
+                    material -> {
+                            /* Then, create a rectangular prism, using ShapeFactory.makeCube() and use the difference vector
+                                   to extend to the necessary length.  */
+                      ModelRenderable model = ShapeFactory.makeCube(
+                              new Vector3(.01f, .01f, difference.length()),
+                              Vector3.zero(), material);
+                            /* Last, set the world rotation of the node to the rotation calculated earlier and set the world position to
+                                   the midpoint between the given points . */
+                      Node node = new Node();
+                      node.setParent(curr);
+                      node.setRenderable(model);
+                      node.setWorldPosition(Vector3.add(point1, point2).scaled(.5f));
+                      node.setWorldRotation(rotationFromAToB);
+                    }
+            );
+
+  }
+
+  private void newAddAnchorToList(Anchor anchor){
+    synchronized (anchorsLock){
+      anchors.add(anchor);
+      AnchorNode anchorNode = new AnchorNode(anchor);
+      anchorNode.setParent(arFragment.getArSceneView().getScene());
+      anchorNodes.add(anchorNode);
+      renderPath();
+
+    }
+  }
+  /*
   private void addAnchorToList(Context context, Anchor anchor) {
     synchronized (anchorsLock) {
       try {
@@ -580,6 +666,16 @@ public class CloudAnchorActivity extends AppCompatActivity
         vos.setBlendMode(BlendMode.Shadow);
         vos.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
         anchors.add(anchor);
+
+
+        AnchorNode anchorNode = new AnchorNode(anchor);
+        anchorNode.setParent(arFragment.getArSceneView().getScene());
+        anchorNodes.add(anchorNode);
+        //renderPath();
+
+
+
+
         anchorMatrices.add(new float[16]);
         virtualObjects.add(vo);
         virtualObjectShadows.add(vos);
@@ -588,7 +684,7 @@ public class CloudAnchorActivity extends AppCompatActivity
       }
     }
   }
-
+  */
   /** Callback function invoked when the user presses the OK button in the Resolve Dialog. */
   private void onRoomCodeEntered(Long roomCode) {
     currentMode = HostResolveMode.RESOLVING;
@@ -611,20 +707,6 @@ public class CloudAnchorActivity extends AppCompatActivity
               }
             }
     );
-
-    // Register a new listener for the given room.
-//    firebaseManager.registerNewListenerForRoom(
-//        roomCode,
-//        0L,
-//        cloudAnchorId -> {
-//          // When the cloud anchor ID is available from Firebase.
-//          CloudAnchorResolveStateListener resolveListener =
-//              new CloudAnchorResolveStateListener(roomCode);
-//          Preconditions.checkNotNull(resolveListener, "The resolve listener cannot be null.");
-//          this.snackbarHelper.showMessageWithDismiss(this, "resolving room with "+cloudAnchorId);
-//          cloudManager.resolveCloudAnchor(
-//              cloudAnchorId, resolveListener, SystemClock.uptimeMillis());
-//        });
   }
 
   /**
@@ -692,7 +774,6 @@ public class CloudAnchorActivity extends AppCompatActivity
     }
 
     private void reset() {
-      addAnchorToList(context, anchor);
       setNewAnchor(null, false);
       cloudAnchorId = null;
     }
@@ -712,8 +793,6 @@ public class CloudAnchorActivity extends AppCompatActivity
     public void onCloudTaskComplete(Anchor anchor) {
       // When the anchor has been resolved, or had a final error state.
       CloudAnchorState cloudState = anchor.getCloudAnchorState();
-
-      addAnchorToList(context, anchor);
       if (cloudState.isError()) {
         Log.w(
             TAG,
@@ -737,6 +816,10 @@ public class CloudAnchorActivity extends AppCompatActivity
       snackbarHelper.showMessageWithDismiss(
           CloudAnchorActivity.this, getString(R.string.snackbar_resolve_no_result_yet));
     }
+
+
+
+
   }
 
   public void showNoticeDialog(HostResolveListener listener) {

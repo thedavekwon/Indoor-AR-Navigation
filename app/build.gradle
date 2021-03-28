@@ -40,6 +40,9 @@ dependencies {
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
 
     implementation 'com.google.guava:guava:27.0.1-android'
+    implementation project(path: ':core')
+    implementation project(path: ':ux')
+    implementation project(path: ':ux')
 }
 
 apply plugin: 'com.google.gms.google-services'

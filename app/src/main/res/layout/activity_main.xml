@@ -19,11 +19,20 @@
     android:layout_height="match_parent"
     tools:context="com.google.ar.core.examples.java.cloudanchor.CloudAnchorActivity">
 
+  <fragment
+      android:id="@+id/ux_fragment"
+      android:name="com.google.ar.sceneform.ux.ArFragment"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+
+  <!--
   <android.opengl.GLSurfaceView
       android:id="@+id/surfaceview"
       android:layout_width="fill_parent"
       android:layout_height="fill_parent"
       android:layout_gravity="top"/>
+
+  -->
 
   <LinearLayout
       android:layout_width="match_parent"

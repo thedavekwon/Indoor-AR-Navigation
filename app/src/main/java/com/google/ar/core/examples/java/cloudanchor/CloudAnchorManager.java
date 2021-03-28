@@ -74,7 +74,8 @@ class CloudAnchorManager {
   synchronized void hostCloudAnchor(Anchor anchor, CloudAnchorHostListener listener) {
     Preconditions.checkNotNull(session, "The session cannot be null.");
     Anchor newAnchor = session.hostCloudAnchor(anchor);
-    pendingHostAnchors.put(newAnchor, listener);
+    if(pendingHostAnchors.isEmpty())
+      pendingHostAnchors.put(newAnchor, listener);
   }
 
   /**
@@ -92,6 +93,7 @@ class CloudAnchorManager {
   }
 
   /** Should be called after a {@link Session#update()} call. */
+
   synchronized void onUpdate() {
     Preconditions.checkNotNull(session, "The session cannot be null.");
     Iterator<Map.Entry<Anchor, CloudAnchorHostListener>> hostIter =
