@@ -72,6 +72,7 @@ import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.HitTestResult;
 import com.google.ar.sceneform.Node;
+import com.google.ar.sceneform.NodeParent;
 import com.google.ar.sceneform.Scene;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
@@ -90,6 +91,7 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Set;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -98,31 +100,13 @@ import javax.microedition.khronos.opengles.GL10;
 public class CloudAnchorActivity extends AppCompatActivity
     implements NoticeDialogListener {
   private static final String TAG = CloudAnchorActivity.class.getSimpleName();
-  private static final float[] OBJECT_COLOR = new float[] {139.0f, 195.0f, 74.0f, 255.0f};
-
   private enum HostResolveMode {
     NONE,
     HOSTING,
     RESOLVING,
   }
 
-  // Rendering. The Renderers are created here, and initialized when the GL surface is created.
-  private GLSurfaceView surfaceView;
-  private final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
-  private final ObjectRenderer virtualObject = new ObjectRenderer();
-  private final ArrayList<ObjectRenderer> virtualObjects = new ArrayList<>();
-  private final ObjectRenderer virtualObjectShadow = new ObjectRenderer();
-  private final ArrayList<ObjectRenderer> virtualObjectShadows = new ArrayList<>();
-  private final PlaneRenderer planeRenderer = new PlaneRenderer();
-  private final PointCloudRenderer pointCloudRenderer = new PointCloudRenderer();
-
   private boolean installRequested;
-
-  // Temporary matrices allocated here to reduce number of allocations for each frame.
-  private final float[] anchorMatrix = new float[16];
-  private ArrayList<float[]> anchorMatrices = new ArrayList<>();
-  private final float[] viewMatrix = new float[16];
-  private final float[] projectionMatrix = new float[16];
 
   // Locks needed for synchronization
   private final Object singleTapLock = new Object();
@@ -147,15 +131,17 @@ public class CloudAnchorActivity extends AppCompatActivity
   private Boolean wasTappedThisFrame = false;
 
   private Renderable waypointRenderable;
+  private Renderable tempAnchorNodeRenderable;
 
   private Session session;
 
   @GuardedBy("anchorLock")
   private Anchor anchor;
+  @GuardedBy("anchorLock")
+  private AnchorNode anchorNode;
   @GuardedBy("anchorsLock")
-  private ArrayList<Anchor> anchors = new ArrayList<Anchor>();
-  @GuardedBy("anchorsLock")
-  private ArrayList<AnchorNode> anchorNodes = new ArrayList<AnchorNode>();
+  private CloudAnchorMap cloudAnchorMap = new CloudAnchorMap();
+
 
   private ArFragment arFragment;
 
@@ -169,6 +155,7 @@ public class CloudAnchorActivity extends AppCompatActivity
 
   private final Set<AnimationInstance> animators = new ArraySet<>();
   private Node waypointNode;
+  private Node tempAnchorNode;
   private static class AnimationInstance {
     Animator animator;
     Long startTime;
@@ -195,6 +182,7 @@ public class CloudAnchorActivity extends AppCompatActivity
     arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
     initializeScene(arFragment.getArSceneView().getScene());
     waypointNode = new Node();
+    tempAnchorNode = new Node();
 
     WeakReference<CloudAnchorActivity> weakActivity = new WeakReference<>(this);
 
@@ -231,6 +219,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                       CloudAnchorActivity activity = weakActivity.get();
                       if (activity != null) {
                         activity.waypointRenderable = modelRenderable;
+                        activity.tempAnchorNodeRenderable = modelRenderable;
                       }
                     })
             .exceptionally(
@@ -513,16 +502,22 @@ public class CloudAnchorActivity extends AppCompatActivity
     return false;
   }
 
-  /** Sets the new value of the current anchor. Detaches the old anchor, if it was non-null. */
   private void setNewAnchor(Anchor newAnchor) {
     synchronized (anchorLock) {
-      /*if (anchor != null) {
-        anchor.detach();
+      if(newAnchor != null) {
+        anchor = newAnchor;
+        anchorNode = new AnchorNode(anchor);
+        anchorNode.setParent(arFragment.getArSceneView().getScene());
+        renderPath();
       }
-      anchor = newAnchor;
-       */
+    }
+  }
+
+  /** Sets the new value of the current anchor. Detaches the old anchor, if it was non-null. */
+  private void setNewAnchor(Anchor newAnchor, Long anchorId) {
+    synchronized (anchorLock) {
       if(newAnchor != null)
-        newAddAnchorToList(newAnchor);
+        newAddAnchorToList(newAnchor, anchorId);
     }
   }
 
@@ -591,22 +586,30 @@ public class CloudAnchorActivity extends AppCompatActivity
     currentMode = HostResolveMode.NONE;
     firebaseManager.clearRoomListener();
     hostListener = null;
-    setNewAnchor(null);
+    setNewAnchor(null, true);
     snackbarHelper.hide(this);
     cloudManager.clearListeners();
   }
 
   private void renderPath(){
-    if(anchorNodes.size() < 2)
-      return;
-    else {
-      for(int i = 1; i < anchorNodes.size(); i++){
-        renderLineBetweenTwoAnchorNodes(anchorNodes.get(i - 1), anchorNodes.get(i));
-
-        if(i == anchorNodes.size() - 1){
-          renderWaypoint(anchorNodes.get(i));
-        }
+    if(cloudAnchorMap.hasPath() && cloudAnchorMap.size() >= 2) {
+//      for(long i = 1; i < cloudAnchorMap.size(); i++){
+//        renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(i - 1), cloudAnchorMap.getAnchorNodeById(i));
+//
+//        if(i == cloudAnchorMap.size() - 1){
+//          renderWaypoint(cloudAnchorMap.getAnchorNodeById(i));
+//        }
+//      }
+      // TEMPORARY
+      ArrayList<Long> anchorIds = cloudAnchorMap.getAnchorIds();
+      Log.i("CloudAnchorMap", anchorIds.toString());
+      for (int i = 0; i < anchorIds.size()-1; i++) {
+        renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(anchorIds.get(i)), cloudAnchorMap.getAnchorNodeById(anchorIds.get(i+1)));
       }
+      renderWaypoint(cloudAnchorMap.getAnchorNodeById(Collections.max(anchorIds)));
+    }
+    if (anchorNode != null) {
+      renderTempAnchor(anchorNode);
     }
   }
 
@@ -628,15 +631,31 @@ public class CloudAnchorActivity extends AppCompatActivity
       material.setFloat4("baseColorFactor", color);
     }
   }
+
+  private void renderTempAnchor(AnchorNode anchorNode){
+    // Create the transformable model and add it to the anchor.
+    tempAnchorNode.setParent(anchorNode);
+    tempAnchorNode.setRenderable(tempAnchorNodeRenderable);
+    tempAnchorNode.setLocalScale(new Vector3(.2f,.2f,.2f));
+
+
+    FilamentAsset filamentAsset = tempAnchorNode.getRenderableInstance().getFilamentAsset();
+    if (filamentAsset.getAnimator().getAnimationCount() > 0) {
+      animators.add(new AnimationInstance(filamentAsset.getAnimator(), 0, System.nanoTime()));
+    }
+
+    Color color = new Color(0, 0, 0, 1);
+    for (int i = 0; i < tempAnchorNodeRenderable.getSubmeshCount(); ++i) {
+      Material material = tempAnchorNodeRenderable.getMaterial(i);
+      material.setFloat4("baseColorFactor", color);
+    }
+  }
+
   private void renderLineBetweenTwoAnchorNodes(AnchorNode prev, AnchorNode curr){
     Vector3 point1 = curr.getWorldPosition();
     Vector3 point2 = prev.getWorldPosition();
-
-    Node lineNode = new Node();
-
     /* First, find the vector extending between the two points and define a look rotation in terms of this
         Vector. */
-
     final Vector3 difference = Vector3.subtract(point1, point2);
     final Vector3 directionFromTopToBottom = difference.normalized();
     final Quaternion rotationFromAToB =
@@ -664,49 +683,13 @@ public class CloudAnchorActivity extends AppCompatActivity
 
   }
 
-  private void newAddAnchorToList(Anchor anchor){
+  private void newAddAnchorToList(Anchor anchor, Long anchorId){
     synchronized (anchorsLock){
-      anchors.add(anchor);
-      AnchorNode anchorNode = new AnchorNode(anchor);
-      anchorNode.setParent(arFragment.getArSceneView().getScene());
-      anchorNodes.add(anchorNode);
+      cloudAnchorMap.add(anchor, anchorId, arFragment.getArSceneView().getScene());
       renderPath();
-
     }
   }
-  /*
-  private void addAnchorToList(Context context, Anchor anchor) {
-    synchronized (anchorsLock) {
-      try {
-        ObjectRenderer vo = new ObjectRenderer();
-        ObjectRenderer vos = new ObjectRenderer();
-        vo.createOnGlThread(context, "models/andy.obj", "models/andy.png");
-        vo.setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
 
-        vos.createOnGlThread(
-                context, "models/andy_shadow.obj", "models/andy_shadow.png");
-        vos.setBlendMode(BlendMode.Shadow);
-        vos.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
-        anchors.add(anchor);
-
-
-        AnchorNode anchorNode = new AnchorNode(anchor);
-        anchorNode.setParent(arFragment.getArSceneView().getScene());
-        anchorNodes.add(anchorNode);
-        //renderPath();
-
-
-
-
-        anchorMatrices.add(new float[16]);
-        virtualObjects.add(vo);
-        virtualObjectShadows.add(vos);
-      } catch (IOException exception) {
-        Log.e("new Anchor", "Failed to put anchor to list");
-      }
-    }
-  }
-  */
   /** Callback function invoked when the user presses the OK button in the Resolve Dialog. */
   private void onRoomCodeEntered(Long roomCode) {
     currentMode = HostResolveMode.RESOLVING;
@@ -723,9 +706,9 @@ public class CloudAnchorActivity extends AppCompatActivity
               Preconditions.checkNotNull(resolveListener, "The resolve listener cannot be null.");
               Log.i("anchors", anchorIds.toString());
               for (int i = 0; i < anchorIds.size(); i++) {
-                Log.i("anchor", anchorIds.get(i));
+                Log.i("anchor", anchorIds.get(i).second);
                 cloudManager.resolveCloudAnchor(
-                        anchorIds.get(i), resolveListener, SystemClock.uptimeMillis());
+                        anchorIds.get(i).first, anchorIds.get(i).second, resolveListener, SystemClock.uptimeMillis());
               }
             }
     );
@@ -780,7 +763,7 @@ public class CloudAnchorActivity extends AppCompatActivity
       Preconditions.checkState(
               cloudAnchorId == null, "The cloud anchor ID cannot have been set before.");
       cloudAnchorId = anchor.getCloudAnchorId();
-      setNewAnchor(anchor);
+      setNewAnchor(anchor, roomIdx);
       checkAndMaybeShare();
     }
 
@@ -812,7 +795,7 @@ public class CloudAnchorActivity extends AppCompatActivity
     }
 
     @Override
-    public void onCloudTaskComplete(Anchor anchor) {
+    public void onCloudTaskComplete(Anchor anchor, Long anchorId) {
       // When the anchor has been resolved, or had a final error state.
       CloudAnchorState cloudState = anchor.getCloudAnchorState();
       if (cloudState.isError()) {
@@ -826,9 +809,7 @@ public class CloudAnchorActivity extends AppCompatActivity
             CloudAnchorActivity.this, getString(R.string.snackbar_resolve_error, cloudState));
         return;
       }
-//      snackbarHelper.showMessage(
-//          CloudAnchorActivity.this, getString(R.string.snackbar_resolve_success));
-      setNewAnchor(anchor);
+      setNewAnchor(anchor, anchorId);
       snackbarHelper.showMessageWithDismiss(CloudAnchorActivity.this, anchor.getPose().toString());
     }
 

@@ -18,6 +18,7 @@ package com.google.ar.core.examples.java.cloudanchor;
 
 import android.content.Context;
 import android.util.Log;
+import android.util.Pair;
 
 import androidx.annotation.NonNull;
 
@@ -58,7 +59,7 @@ class FirebaseManager {
   /** Listener for last room Idx */
   interface CloudAnchorIdsListener {
     /** Invoked when a new cloud anchor ID is available. */
-    void onCloudAnchorIds(ArrayList<String> anchorIds);
+    void onCloudAnchorIds(ArrayList<Pair<Long, String>> anchorIds);
   }
 
   // Names of the nodes used in the Firebase Database
@@ -191,12 +192,12 @@ class FirebaseManager {
                 Object valObj = dataSnapshot.child(ROOM_LAST_IDX).getValue();
                 if (valObj != null) {
                   Long lastIdx = Long.parseLong(String.valueOf(valObj));
-                  ArrayList<String> anchorIds = new ArrayList<String>();
-                  for (int i = 0; i <= lastIdx; i++) {
+                  ArrayList<Pair<Long, String>> anchorIds = new ArrayList<>();
+                  for (long i = 0; i <= lastIdx; i++) {
                     Object anchorIdObj = dataSnapshot.child(String.valueOf(i)).child(KEY_ANCHOR_ID).getValue();
                     if (anchorIdObj != null) {
                       String anchorId = String.valueOf(anchorIdObj);
-                      anchorIds.add(anchorId);
+                      anchorIds.add(new Pair<>(i, anchorId));
                     }
                   }
                   listener.onCloudAnchorIds(anchorIds);
