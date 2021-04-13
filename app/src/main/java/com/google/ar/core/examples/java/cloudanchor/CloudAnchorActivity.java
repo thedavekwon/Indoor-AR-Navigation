@@ -183,6 +183,7 @@ public class CloudAnchorActivity extends AppCompatActivity
     }
   }
 
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -196,6 +197,27 @@ public class CloudAnchorActivity extends AppCompatActivity
     waypointNode = new Node();
 
     WeakReference<CloudAnchorActivity> weakActivity = new WeakReference<>(this);
+
+
+    //Directional Arrow
+    ModelRenderable.builder()
+            .setSource(this,  Uri.parse(
+                    "https://storage.googleapis.com/ar-answers-in-search-models/static/Tiger/model.glb"))
+            .build()
+            .thenAccept(
+                    modelRenderable -> {
+                      Node directionalNode = new Node();
+                      directionalNode.setParent(arFragment.getArSceneView().getScene());
+                      directionalNode.setRenderable(modelRenderable);
+                      directionalNode.setLocalPosition(new Vector3(0f, -2f, -7f));
+                      directionalNode.setLocalScale(new Vector3(3f, 3f, 3f));
+
+                    })
+            .exceptionally(throwable ->  {
+              Toast.makeText(this, "Error", Toast.LENGTH_SHORT).show();
+                return null;});
+
+
 
     ModelRenderable.builder()
             .setSource(
