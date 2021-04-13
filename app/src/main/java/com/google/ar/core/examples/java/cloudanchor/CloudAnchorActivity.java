@@ -17,21 +17,25 @@
 package com.google.ar.core.examples.java.cloudanchor;
 
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.text.InputType;
 import android.util.ArraySet;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.GuardedBy;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.DialogFragment;
 
@@ -49,6 +53,7 @@ import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.Point.OrientationMode;
 import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.TrackingState;
@@ -74,6 +79,7 @@ import com.google.ar.sceneform.HitTestResult;
 import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.NodeParent;
 import com.google.ar.sceneform.Scene;
+import com.google.ar.sceneform.SceneView;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.Color;
@@ -156,6 +162,8 @@ public class CloudAnchorActivity extends AppCompatActivity
   private final Set<AnimationInstance> animators = new ArraySet<>();
   private Node waypointNode;
   private Node tempAnchorNode;
+
+  private String anchorName;
   private static class AnimationInstance {
     Animator animator;
     Long startTime;
@@ -175,7 +183,6 @@ public class CloudAnchorActivity extends AppCompatActivity
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
-    //surfaceView = findViewById(R.id.surfaceview);
     displayRotationHelper = new DisplayRotationHelper(this);
 
 
@@ -186,26 +193,25 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     WeakReference<CloudAnchorActivity> weakActivity = new WeakReference<>(this);
 
-
     //Directional Arrow
+
     ModelRenderable.builder()
             .setSource(this,  Uri.parse(
                     "https://storage.googleapis.com/ar-answers-in-search-models/static/Tiger/model.glb"))
+             .setIsFilamentGltf(true)
             .build()
             .thenAccept(
                     modelRenderable -> {
                       Node directionalNode = new Node();
                       directionalNode.setParent(arFragment.getArSceneView().getScene());
                       directionalNode.setRenderable(modelRenderable);
-                      directionalNode.setLocalPosition(new Vector3(0f, -2f, -7f));
+                      directionalNode.setLocalPosition(new Vector3(0f, 0f, 0f));
                       directionalNode.setLocalScale(new Vector3(3f, 3f, 3f));
 
                     })
             .exceptionally(throwable ->  {
               Toast.makeText(this, "Error", Toast.LENGTH_SHORT).show();
                 return null;});
-
-
 
     ModelRenderable.builder()
             .setSource(
@@ -284,9 +290,7 @@ public class CloudAnchorActivity extends AppCompatActivity
             if (shouldCreateAnchorWithHit(hit)) {
               Anchor newAnchor = hit.createAnchor();
 
-              System.out.println("Cloud Anchor Mode: " + arFragment.getArSceneView().getSession().getConfig().getCloudAnchorMode());
-              cloudManager.hostCloudAnchor(newAnchor, hostListener);
-              System.out.println("boop");
+              addCloudAnchor(newAnchor);
 
               return true; // Only handle the first valid hit.
             }
@@ -295,6 +299,40 @@ public class CloudAnchorActivity extends AppCompatActivity
         return false;
       }
     }
+  }
+
+  private void addCloudAnchor(Anchor newAnchor){
+    promptForAnchorName();
+
+    cloudManager.hostCloudAnchor(newAnchor, hostListener);
+  }
+
+  private void promptForAnchorName(){
+    anchorName = null;
+    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+    builder.setTitle("Enter Anchor Name:");
+
+// Set up the input
+    final EditText input = new EditText(this);
+// Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
+    input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+    builder.setView(input);
+
+// Set up the buttons
+    builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+      @Override
+      public void onClick(DialogInterface dialog, int which) {
+        anchorName = input.getText().toString();
+      }
+    });
+    builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+      @Override
+      public void onClick(DialogInterface dialog, int which) {
+        dialog.cancel();
+      }
+    });
+
+    builder.show();
   }
 
   private void onFrame(FrameTime frameTime) {
@@ -771,7 +809,7 @@ public class CloudAnchorActivity extends AppCompatActivity
       if (roomCode == null || roomIdx == null || cloudAnchorId == null) {
         return;
       }
-      firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId);
+      firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName);
       roomIdx++;
       snackbarHelper.showMessageWithDismiss(
               CloudAnchorActivity.this, getString(R.string.snackbar_cloud_id_shared));

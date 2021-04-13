@@ -72,7 +72,7 @@ class CloudAnchorManager {
    * This method hosts an anchor. The {@code listener} will be invoked when the results are
    * available.
    */
-  synchronized void hostCloudAnchor(Anchor anchor, CloudAnchorHostListener listener) {
+  synchronized void                                hostCloudAnchor(Anchor anchor, CloudAnchorHostListener listener) {
     Preconditions.checkNotNull(session, "The session cannot be null.");
     Anchor newAnchor = session.hostCloudAnchor(anchor);
     if(pendingHostAnchors.isEmpty())
