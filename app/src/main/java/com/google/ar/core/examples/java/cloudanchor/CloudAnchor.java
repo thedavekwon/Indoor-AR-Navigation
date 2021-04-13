@@ -8,30 +8,61 @@ import javax.annotation.Nullable;
 
 public class CloudAnchor {
     @Nullable
-    private String displayName;
+    private String anchorName;
     @Nullable
     private Anchor anchor;
     @Nullable
     private AnchorNode anchorNode;
     private Long anchorId;
+    private String cloudAnchorId;
+    private boolean isDisplay = true;
+
+
+    public CloudAnchor(Long anchorId, String anchorName, String cloudAnchorId) {
+        this.anchorId = anchorId;
+        this.anchorName = anchorName;
+        this.cloudAnchorId = cloudAnchorId;
+        this.isDisplay = false;
+    }
 
     public CloudAnchor(Anchor anchor, Long anchorId, NodeParent nodeParent) {
-        this.anchor = anchor;
         this.anchorId = anchorId;
+        this.cloudAnchorId = anchor.getCloudAnchorId();
+        this.anchor = anchor;
+        setAnchorNode(nodeParent);
+    }
+
+    public CloudAnchor(Anchor anchor, String anchorName, Long anchorId, NodeParent nodeParent) {
+        this.anchorName = anchorName;
+        this.anchorId = anchorId;
+        this.cloudAnchorId = anchor.getCloudAnchorId();
+        this.anchor = anchor;
+        setAnchorNode(nodeParent);
+    }
+
+    public CloudAnchor(Anchor anchor, String anchorName, String cloudAnchorId, Long anchorId, NodeParent nodeParent) {
+        this.anchorName = anchorName;
+        this.anchorId = anchorId;
+        this.cloudAnchorId = cloudAnchorId;
+        this.anchor = anchor;
+        setAnchorNode(nodeParent);
+    }
+
+    public void setDisplayName(@Nullable String anchorName) {
+        this.anchorName = anchorName;
+    }
+
+    public void setAnchor(Anchor anchor) {
+        this.anchor = anchor;
+    }
+
+    public void setAnchorNode(NodeParent nodeParent) {
         this.anchorNode = new AnchorNode(anchor);
         this.anchorNode.setParent(nodeParent);
     }
 
-    public CloudAnchor(Anchor anchor, String displayName, Long anchorId, NodeParent nodeParent) {
-        this.anchor = anchor;
-        this.displayName = displayName;
-        this.anchorId = anchorId;
-        this.anchorNode = new AnchorNode(anchor);
-        this.anchorNode.setParent(nodeParent);
-    }
-
-    public void setDisplayName(@Nullable String displayName) {
-        this.displayName = displayName;
+    public boolean getIsDisplay() {
+        return this.isDisplay;
     }
 
     public Anchor getAnchor() {
@@ -40,6 +71,10 @@ public class CloudAnchor {
 
     public Long getAnchorId() {
         return this.anchorId;
+    }
+
+    public String getCloudAnchorId() {
+        return this.cloudAnchorId;
     }
 
     public AnchorNode getAnchorNode() {

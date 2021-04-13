@@ -20,8 +20,6 @@ import android.content.Context;
 import android.util.Log;
 import android.util.Pair;
 
-import androidx.annotation.NonNull;
-
 import com.google.common.base.Preconditions;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.database.DataSnapshot;
@@ -59,7 +57,7 @@ class FirebaseManager {
   /** Listener for last room Idx */
   interface CloudAnchorIdsListener {
     /** Invoked when a new cloud anchor ID is available. */
-    void onCloudAnchorIds(ArrayList<Pair<Long, String>> anchorIds);
+    void onCloudAnchorIds(ArrayList<CloudAnchor> resolvingAnchors);
   }
 
   // Names of the nodes used in the Firebase Database
@@ -68,7 +66,7 @@ class FirebaseManager {
   private static final String ROOM_LAST_IDX = "last_idx_code";
 
   // Some common keys and values used when writing to the Firebase Database.
-  private static final String KEY_DISPLAY_NAME = "display_name";
+  private static final String KEY_ANCHOR_NAME = "display_name";
   private static final String KEY_ANCHOR_ID = "hosted_anchor_id";
   private static final String KEY_TIMESTAMP = "updated_at_timestamp";
   private static final String DISPLAY_NAME_VALUE = "Android EAP Sample";
@@ -147,7 +145,7 @@ class FirebaseManager {
     DatabaseReference roomRef = hotspotListRef.child(String.valueOf(roomCode));
     DatabaseReference roomIdxRef = hotspotListRef.child(String.valueOf(roomCode)).child(String.valueOf(roomIdx));
     roomRef.child(ROOM_LAST_IDX).setValue(roomIdx);
-    roomIdxRef.child(KEY_DISPLAY_NAME).setValue(cloudAnchorName);
+    roomIdxRef.child(KEY_ANCHOR_NAME).setValue(cloudAnchorName);
     roomIdxRef.child(KEY_ANCHOR_ID).setValue(cloudAnchorId);
     roomIdxRef.child(KEY_TIMESTAMP).setValue(System.currentTimeMillis());
   }
@@ -192,15 +190,17 @@ class FirebaseManager {
                 Object valObj = dataSnapshot.child(ROOM_LAST_IDX).getValue();
                 if (valObj != null) {
                   Long lastIdx = Long.parseLong(String.valueOf(valObj));
-                  ArrayList<Pair<Long, String>> anchorIds = new ArrayList<>();
+                  ArrayList<CloudAnchor> resolvingAnchors = new ArrayList<>();
                   for (long i = 0; i <= lastIdx; i++) {
-                    Object anchorIdObj = dataSnapshot.child(String.valueOf(i)).child(KEY_ANCHOR_ID).getValue();
-                    if (anchorIdObj != null) {
-                      String anchorId = String.valueOf(anchorIdObj);
-                      anchorIds.add(new Pair<>(i, anchorId));
+                    Object cloudAnchorIdObj = dataSnapshot.child(String.valueOf(i)).child(KEY_ANCHOR_ID).getValue();
+                    Object anchorNameObj = dataSnapshot.child(String.valueOf(i)).child(KEY_ANCHOR_NAME).getValue();
+                    if (cloudAnchorIdObj != null) {
+                      String cloudAnchorId = String.valueOf(cloudAnchorIdObj);
+                      String anchorName = String.valueOf(anchorNameObj);
+                      resolvingAnchors.add(new CloudAnchor(i, anchorName, cloudAnchorId));
                     }
                   }
-                  listener.onCloudAnchorIds(anchorIds);
+                  listener.onCloudAnchorIds(resolvingAnchors);
                 }
               }
 

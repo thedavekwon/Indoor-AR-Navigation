@@ -18,6 +18,11 @@ public class CloudAnchorMap {
         Log.i("cloudAnchorMap", "Anchor Id " + anchorId + " inserted");
     }
 
+    public void add(CloudAnchor cloudAnchor) {
+        map.put(cloudAnchor.getAnchorId(), cloudAnchor);
+        Log.i("cloudAnchorMap", "Anchor Id " + cloudAnchor.getAnchorId() + " inserted");
+    }
+
     public boolean hasPath() {
         return true;
     }

@@ -50,7 +50,7 @@ class CloudAnchorManager {
   interface CloudAnchorResolveListener {
 
     /** This method is invoked when the results of a Cloud Anchor operation are available. */
-    void onCloudTaskComplete(Anchor anchor, Long anchorId);
+    void onCloudTaskComplete(CloudAnchor cloudAnchor);
 
     /** This method show the toast message. */
     void onShowResolveMessage();
@@ -58,7 +58,7 @@ class CloudAnchorManager {
 
   @Nullable private Session session = null;
   private final HashMap<Anchor, CloudAnchorHostListener> pendingHostAnchors = new HashMap<>();
-  private final HashMap<Pair<Long, Anchor>, CloudAnchorResolveListener> pendingResolveAnchors = new HashMap<>();
+  private final HashMap<CloudAnchor, CloudAnchorResolveListener> pendingResolveAnchors = new HashMap<>();
 
   /**
    * This method is used to set the session, since it might not be available when this object is
@@ -84,13 +84,14 @@ class CloudAnchorManager {
    * available.
    */
   synchronized void resolveCloudAnchor(
-      Long anchorId, String cloudAnchorId, CloudAnchorResolveListener listener, long startTimeMillis) {
-    Log.w(TAG, "resolveCloudAnchor: "+anchorId, null);
+      CloudAnchor cloudAnchor, CloudAnchorResolveListener listener, long startTimeMillis) {
+    Log.w(TAG, "resolveCloudAnchor: "+cloudAnchor.getAnchorId(), null);
     Preconditions.checkNotNull(session, "The session cannot be null.");
-    Anchor newAnchor = session.resolveCloudAnchor(cloudAnchorId);
+    Anchor newAnchor = session.resolveCloudAnchor(cloudAnchor.getCloudAnchorId());
+    cloudAnchor.setAnchor(newAnchor);
     Log.w(TAG, "resolveCloudAnchor: "+newAnchor.getPose().toString(), null);
     deadlineForMessageMillis = startTimeMillis + DURATION_FOR_NO_RESOLVE_RESULT_MS;
-    pendingResolveAnchors.put(new Pair<>(anchorId, newAnchor), listener);
+    pendingResolveAnchors.put(cloudAnchor, listener);
   }
 
   /** Should be called after a {@link Session#update()} call. */
@@ -110,17 +111,15 @@ class CloudAnchorManager {
       }
     }
 
-    Iterator<Map.Entry<Pair<Long, Anchor>, CloudAnchorResolveListener>> resolveIter =
+    Iterator<Map.Entry<CloudAnchor, CloudAnchorResolveListener>> resolveIter =
         pendingResolveAnchors.entrySet().iterator();
     while (resolveIter.hasNext()) {
-      Map.Entry<Pair<Long, Anchor>, CloudAnchorResolveListener> entry = resolveIter.next();
-      Long anchorId = entry.getKey().first;
-      Anchor anchor = entry.getKey().second;
+      Map.Entry<CloudAnchor, CloudAnchorResolveListener> entry = resolveIter.next();
       CloudAnchorResolveListener listener = entry.getValue();
-      Log.i("anchor", "anchor resolving: " + anchor.getCloudAnchorId());
-      Log.i("anchor", "anchor resolving status: " + anchor.getCloudAnchorState().toString());
-      if (isReturnableState(anchor.getCloudAnchorState())) {
-        listener.onCloudTaskComplete(anchor, anchorId);
+      Log.i("anchor", "anchor resolving: " + entry.getKey().getCloudAnchorId());
+      Log.i("anchor", "anchor resolving status: " + entry.getKey().getAnchor().getCloudAnchorState().toString());
+      if (isReturnableState(entry.getKey().getAnchor().getCloudAnchorState())) {
+        listener.onCloudTaskComplete(entry.getKey());
         resolveIter.remove();
       }
       if (deadlineForMessageMillis > 0 && SystemClock.uptimeMillis() > deadlineForMessageMillis) {
