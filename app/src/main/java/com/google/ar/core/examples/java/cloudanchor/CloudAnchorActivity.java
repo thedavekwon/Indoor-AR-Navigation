@@ -642,7 +642,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         setNewAnchor(null, true);
         snackbarHelper.hide(this);
         cloudManager.clearListeners();
-//        cloudAnchorMap.clear();
+        cloudAnchorMap.clear();
     }
 
     private void renderPath() {
