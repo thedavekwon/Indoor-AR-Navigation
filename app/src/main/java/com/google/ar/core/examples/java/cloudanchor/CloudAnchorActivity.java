@@ -781,6 +781,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         private Long roomCode;
         private Long roomIdx;
         private String cloudAnchorId;
+        private Pose cloudAnchorPose;
 
         @Override
         public void onNewRoomCode(Context currentContext, Long newRoomCode) {
@@ -819,15 +820,16 @@ public class CloudAnchorActivity extends AppCompatActivity
             Preconditions.checkState(
                     cloudAnchorId == null, "The cloud anchor ID cannot have been set before.");
             cloudAnchorId = anchor.getCloudAnchorId();
+            cloudAnchorPose = anchor.getPose();
             setNewAnchor(anchor);
             checkAndMaybeShare();
         }
 
         private void checkAndMaybeShare() {
-            if (roomCode == null || roomIdx == null || cloudAnchorId == null) {
+            if (roomCode == null || roomIdx == null || cloudAnchorId == null || cloudAnchorPose == null) {
                 return;
             }
-            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName);
+            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose);
 //            setNewAnchor(new CloudAnchor(anchor, anchorName, cloudAnchorId, roomIdx, arFragment.getArSceneView().getScene()));
 //            setNewAnchor(anchor);
             roomIdx++;
@@ -839,6 +841,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         private void reset() {
             setNewAnchor(null, false);
             cloudAnchorId = null;
+            cloudAnchorPose = null;
         }
     }
 

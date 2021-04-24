@@ -45,7 +45,7 @@ public class CloudAnchorMap {
     }
 
     public void clear() {
-        for (Map.Entry<Long, CloudAnchor> entry: map.entrySet()) {
+        for (Map.Entry<Long, CloudAnchor> entry : map.entrySet()) {
             entry.getValue().getAnchorNode().setRenderable(null);
             entry.getValue().getAnchorNode().setParent(null);
             Log.i("clear", String.valueOf(entry.getValue().getAnchorNode().getRenderable() == null));
