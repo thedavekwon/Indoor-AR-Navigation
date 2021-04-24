@@ -8,10 +8,11 @@ import com.google.ar.sceneform.NodeParent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class CloudAnchorMap {
-    private HashMap<Long, CloudAnchor> map = new HashMap<Long, CloudAnchor>();
+    private LinkedHashMap<Long, CloudAnchor> map = new LinkedHashMap<Long, CloudAnchor>();
 
     public void add(Anchor anchor, Long anchorId, NodeParent nodeParent) {
         CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorId, nodeParent);
@@ -51,5 +52,13 @@ public class CloudAnchorMap {
             Log.i("clear", String.valueOf(entry.getValue().getAnchorNode().getRenderable() == null));
         }
         map.clear();
+    }
+
+    public ArrayList<String> getAllNames() {
+        ArrayList<String> names = new ArrayList<>();
+        for (Map.Entry<Long, CloudAnchor> entry : map.entrySet()) {
+            names.add(entry.getValue().getAnchorName());
+        }
+        return names;
     }
 }

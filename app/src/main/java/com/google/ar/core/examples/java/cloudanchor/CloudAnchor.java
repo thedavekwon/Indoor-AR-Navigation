@@ -97,4 +97,8 @@ public class CloudAnchor {
     public AnchorNode getAnchorNode() {
         return this.anchorNode;
     }
+
+    public String getAnchorName() {
+        return this.anchorName;
+    }
 }
