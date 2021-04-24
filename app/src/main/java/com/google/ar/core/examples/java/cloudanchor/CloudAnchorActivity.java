@@ -30,8 +30,13 @@ import android.util.Log;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.GuardedBy;
@@ -135,6 +140,8 @@ public class CloudAnchorActivity extends AppCompatActivity
   private MotionEvent queuedSingleTap;
   @GuardedBy("singleTapLock")
   private Boolean wasTappedThisFrame = false;
+  @GuardedBy("singleTapLock")
+  private Long timeOfLastTouch= System.currentTimeMillis();
 
   private Renderable waypointRenderable;
   private Renderable tempAnchorNodeRenderable;
@@ -177,6 +184,8 @@ public class CloudAnchorActivity extends AppCompatActivity
       this.index = index;
     }
   }
+
+  private final String[] dest_name = new String[1];
 
 
   @Override
@@ -249,6 +258,10 @@ public class CloudAnchorActivity extends AppCompatActivity
     firebaseManager = new FirebaseManager(this);
     currentMode = HostResolveMode.NONE;
     sharedPreferences = getSharedPreferences(PREFERENCE_FILE_KEY, Context.MODE_PRIVATE);
+
+    Spinner dest_dropdown = findViewById(R.id.dest_spinner);
+    dest_dropdown.setVisibility(View.GONE);
+
   }
 
   private void initializeScene(Scene scene) {
@@ -269,10 +282,7 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     synchronized (singleTapLock) {
       synchronized (anchorLock) {
-        if(wasTappedThisFrame)
-          return false;
-        else
-          wasTappedThisFrame = true;
+
         // Only process taps when hosting.
         if (currentMode != HostResolveMode.HOSTING) {
           return false;
@@ -290,8 +300,7 @@ public class CloudAnchorActivity extends AppCompatActivity
             if (shouldCreateAnchorWithHit(hit)) {
               Anchor newAnchor = hit.createAnchor();
 
-              addCloudAnchor(newAnchor);
-
+              promptForAnchorName(newAnchor);
               return true; // Only handle the first valid hit.
             }
           }
@@ -301,38 +310,93 @@ public class CloudAnchorActivity extends AppCompatActivity
     }
   }
 
-  private void addCloudAnchor(Anchor newAnchor){
-    promptForAnchorName();
+  private void createDestinationDropdown(){
+      Spinner dest_dropdown = findViewById(R.id.dest_spinner);
+      String[] items = new String[]{"1", "2", "three", "Select a Destination"};
+      final int num_items = items.length - 1;
+      ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, items){
+        public View getView(int position, View convertView, ViewGroup parent) {
 
-    cloudManager.hostCloudAnchor(newAnchor, hostListener);
+          View v = super.getView(position, convertView, parent);
+
+          ((TextView) v).setTextSize(16);
+
+          return v;
+
+        }
+
+        public View getDropDownView(int position, View convertView,ViewGroup parent) {
+
+          View v = super.getDropDownView(position, convertView,parent);
+
+          ((TextView) v).setGravity(Gravity.CENTER);
+
+          return v;
+
+        }
+        @Override
+        public int getCount() {
+          return(num_items); // Truncate the list
+        }
+      };
+      //set the spinners adapter to the previously created one.
+      dest_dropdown.setAdapter(adapter);
+      dest_dropdown.setPrompt("Select a Destination");
+      dest_dropdown.setOnItemSelectedListener(
+        new AdapterView.OnItemSelectedListener() {
+          @Override
+          public void onNothingSelected(AdapterView<?> adapterView) {
+            Toast.makeText(getApplicationContext(), "No destination selected", Toast.LENGTH_SHORT).show();
+          }
+
+          @Override
+          public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            dest_name[0] = parent.getItemAtPosition(position).toString();
+            Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
+          }
+        });
+    dest_dropdown.setVisibility(View.VISIBLE);
+    dest_dropdown.setSelection(num_items);
+
   }
 
-  private void promptForAnchorName(){
-    anchorName = null;
-    AlertDialog.Builder builder = new AlertDialog.Builder(this);
-    builder.setTitle("Enter Anchor Name:");
+  private void promptForAnchorName(Anchor newAnchor){
+    synchronized (singleTapLock) {
+      long currentTime = System.currentTimeMillis();
+      if (timeOfLastTouch + 500 < currentTime) {
+        anchorName = null;
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Enter Anchor Name:");
 
 // Set up the input
-    final EditText input = new EditText(this);
+        final EditText input = new EditText(this);
 // Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
-    input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-    builder.setView(input);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        builder.setView(input);
 
 // Set up the buttons
-    builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-      @Override
-      public void onClick(DialogInterface dialog, int which) {
-        anchorName = input.getText().toString();
-      }
-    });
-    builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-      @Override
-      public void onClick(DialogInterface dialog, int which) {
-        dialog.cancel();
-      }
-    });
+        builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+          @Override
+          public void onClick(DialogInterface dialog, int which) {
+            anchorName = input.getText().toString();
+            cloudManager.hostCloudAnchor(newAnchor, hostListener);
+            wasTappedThisFrame = false;
+          }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+          @Override
+          public void onClick(DialogInterface dialog, int which) {
+            dialog.cancel();
+            wasTappedThisFrame = false;
+          }
+        });
 
-    builder.show();
+        builder.show();
+        timeOfLastTouch = System.currentTimeMillis();
+      }
+
+    }
+
   }
 
   private void onFrame(FrameTime frameTime) {
@@ -606,6 +670,8 @@ public class CloudAnchorActivity extends AppCompatActivity
     } else {
       onPrivacyAcceptedForResolve();
     }
+
+    createDestinationDropdown();
   }
 
   private void onPrivacyAcceptedForResolve() {
