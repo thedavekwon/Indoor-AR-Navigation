@@ -553,7 +553,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                 anchorNode.setParent(arFragment.getArSceneView().getScene());
                 Log.i("anchor", "new anchor added");
                 Log.i("anchor", String.valueOf(anchorNode == null));
-                renderPath();
+                // renderPath();
             }
         }
     }
@@ -645,8 +645,9 @@ public class CloudAnchorActivity extends AppCompatActivity
         cloudAnchorMap.clear();
     }
 
-    private void renderPath() {
-        if (cloudAnchorMap.hasPath() && cloudAnchorMap.size() >= 2) {
+    private void renderPath(Long sourceId, Long destId) {
+        // Need to pass source and destination anchorIds
+        if (cloudAnchorMap.hasPath(sourceId, destId) && cloudAnchorMap.size() >= 2) {
 //      for(long i = 1; i < cloudAnchorMap.size(); i++){
 //        renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(i - 1), cloudAnchorMap.getAnchorNodeById(i));
 //
@@ -742,7 +743,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         synchronized (anchorsLock) {
             cloudAnchor.setAnchorNode(arFragment.getArSceneView().getScene());
             cloudAnchorMap.add(cloudAnchor);
-            renderPath();
+            // renderPath();
         }
     }
 
