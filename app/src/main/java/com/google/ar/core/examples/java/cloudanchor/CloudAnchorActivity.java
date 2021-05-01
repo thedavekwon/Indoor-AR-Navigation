@@ -18,6 +18,7 @@ package com.google.ar.core.examples.java.cloudanchor;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.opengl.GLES20;
@@ -155,6 +156,7 @@ public class CloudAnchorActivity extends AppCompatActivity
   @GuardedBy("anchorsLock")
   private CloudAnchorMap cloudAnchorMap = new CloudAnchorMap();
 
+  private final static int ANCHOR_DATA_CODE = 1;
 
   private ArFragment arFragment;
 
@@ -171,6 +173,9 @@ public class CloudAnchorActivity extends AppCompatActivity
   private Node tempAnchorNode;
 
   private String anchorName;
+  private ArrayList<String> connectedAnchors;
+  private Anchor newAnchor;
+
   private static class AnimationInstance {
     Animator animator;
     Long startTime;
@@ -282,28 +287,36 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     synchronized (singleTapLock) {
       synchronized (anchorLock) {
+        long currentTime = System.currentTimeMillis();
+        if (timeOfLastTouch + 500 < currentTime) {
+          timeOfLastTouch = System.currentTimeMillis();
+          // Only process taps when hosting.
+          if (currentMode != HostResolveMode.HOSTING) {
+            return false;
+          }
 
-        // Only process taps when hosting.
-        if (currentMode != HostResolveMode.HOSTING) {
-          return false;
-        }
+          Frame frame = arFragment.getArSceneView().getArFrame();
+          TrackingState cameraTrackingState = frame.getCamera().getTrackingState();
+          // Only handle a tap if the anchor is currently null, the queued tap is non-null and the
+          // camera is currently tracking.
+          if (motionEvent != null && cameraTrackingState == TrackingState.TRACKING) {
+            Preconditions.checkState(
+                    currentMode == HostResolveMode.HOSTING,
+                    "We should only be creating an anchor in hosting mode.");
+            for (HitResult hit : frame.hitTest(motionEvent)) {
 
-        Frame frame = arFragment.getArSceneView().getArFrame();
-        TrackingState cameraTrackingState = frame.getCamera().getTrackingState();
-        // Only handle a tap if the anchor is currently null, the queued tap is non-null and the
-        // camera is currently tracking.
-        if (motionEvent != null && cameraTrackingState == TrackingState.TRACKING) {
-          Preconditions.checkState(
-                  currentMode == HostResolveMode.HOSTING,
-                  "We should only be creating an anchor in hosting mode.");
-          for (HitResult hit : frame.hitTest(motionEvent)) {
-            if (shouldCreateAnchorWithHit(hit)) {
-              Anchor newAnchor = hit.createAnchor();
+              if (shouldCreateAnchorWithHit(hit)) {
 
-              promptForAnchorName(newAnchor);
-              return true; // Only handle the first valid hit.
+                newAnchor = hit.createAnchor();
+                promptForAnchorName();
+
+
+                return true; // Only handle the first valid hit.
+              }
+
             }
           }
+
         }
         return false;
       }
@@ -360,41 +373,32 @@ public class CloudAnchorActivity extends AppCompatActivity
 
   }
 
-  private void promptForAnchorName(Anchor newAnchor){
+  private void onReceivedAnchorData(String newAnchorName, ArrayList<String> newConnectedAnchors) {
+    anchorName = newAnchorName;
+    connectedAnchors = newConnectedAnchors;
+    Toast.makeText(getApplicationContext(), "Anchor Name is "+ anchorName + ", Connected Anchors are " + connectedAnchors.toString(), Toast.LENGTH_SHORT).show();
+//        cloudManager.hostCloudAnchor(newAnchor, hostListener);
+    wasTappedThisFrame = false;
+
+    cloudManager.hostCloudAnchor(newAnchor, hostListener);
+  }
+
+  private void promptForAnchorName(){
     synchronized (singleTapLock) {
-      long currentTime = System.currentTimeMillis();
-      if (timeOfLastTouch + 500 < currentTime) {
         anchorName = null;
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Enter Anchor Name:");
+        Bundle bundle = new Bundle();
 
-// Set up the input
-        final EditText input = new EditText(this);
-// Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        builder.setView(input);
+        ArrayList<String> anchorNames = new ArrayList<String>();
+        anchorNames.add("Volvo");
+        anchorNames.add("BMW");
+        anchorNames.add("Ford");
+        anchorNames.add("Mazda");
+        bundle.putStringArrayList("anchorNames", anchorNames);
 
-// Set up the buttons
-        builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-          @Override
-          public void onClick(DialogInterface dialog, int which) {
-            anchorName = input.getText().toString();
-            cloudManager.hostCloudAnchor(newAnchor, hostListener);
-            wasTappedThisFrame = false;
-          }
-        });
-        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-          @Override
-          public void onClick(DialogInterface dialog, int which) {
-            dialog.cancel();
-            wasTappedThisFrame = false;
-          }
-        });
-
-        builder.show();
-        timeOfLastTouch = System.currentTimeMillis();
-      }
-
+        PromptAnchorData promptAnchorData = new PromptAnchorData();
+        promptAnchorData.setArguments(bundle);
+        promptAnchorData.setOkListener(this::onReceivedAnchorData);
+        promptAnchorData.show(getSupportFragmentManager(), "ResolveDialog");
     }
 
   }
