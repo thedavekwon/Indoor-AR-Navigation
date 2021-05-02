@@ -140,12 +140,12 @@ public class CloudAnchorActivity extends AppCompatActivity
     private static final String PREFERENCE_FILE_KEY = "allow_sharing_images";
     private static final String ALLOW_SHARE_IMAGES_KEY = "ALLOW_SHARE_IMAGES";
 
-  @GuardedBy("singleTapLock")
-  private MotionEvent queuedSingleTap;
-  @GuardedBy("singleTapLock")
-  private Boolean wasTappedThisFrame = false;
-  @GuardedBy("singleTapLock")
-  private Long timeOfLastTouch= System.currentTimeMillis();
+    @GuardedBy("singleTapLock")
+    private MotionEvent queuedSingleTap;
+    @GuardedBy("singleTapLock")
+    private Boolean wasTappedThisFrame = false;
+    @GuardedBy("singleTapLock")
+    private Long timeOfLastTouch = System.currentTimeMillis();
 
     private Renderable waypointRenderable;
     private Renderable tempAnchorNodeRenderable;
@@ -159,7 +159,7 @@ public class CloudAnchorActivity extends AppCompatActivity
     @GuardedBy("anchorsLock")
     private CloudAnchorMap cloudAnchorMap = new CloudAnchorMap();
 
-  private final static int ANCHOR_DATA_CODE = 1;
+    private final static int ANCHOR_DATA_CODE = 1;
 
     private ArFragment arFragment;
 
@@ -175,15 +175,15 @@ public class CloudAnchorActivity extends AppCompatActivity
     private Node waypointNode;
     private Node tempAnchorNode;
 
-  private String anchorName;
-  private ArrayList<String> connectedAnchors;
-  private Anchor newAnchor;
+    private String anchorName;
+    private ArrayList<String> connectedAnchors;
+    private Anchor newAnchor;
 
-  private static class AnimationInstance {
-    Animator animator;
-    Long startTime;
-    float duration;
-    int index;
+    private static class AnimationInstance {
+        Animator animator;
+        Long startTime;
+        float duration;
+        int index;
 
         AnimationInstance(Animator animator, int index, Long startTime) {
             this.animator = animator;
@@ -193,7 +193,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         }
     }
 
-  private final String[] dest_name = new String[1];
+    private final String[] dest_name = new String[1];
 
 
     @Override
@@ -263,15 +263,15 @@ public class CloudAnchorActivity extends AppCompatActivity
         resolveButton.setOnClickListener((view) -> onResolveButtonPress());
         roomCodeText = findViewById(R.id.room_code_text);
 
-    // Initialize Cloud Anchor variables.
-    firebaseManager = new FirebaseManager(this);
-    currentMode = HostResolveMode.NONE;
-    sharedPreferences = getSharedPreferences(PREFERENCE_FILE_KEY, Context.MODE_PRIVATE);
+        // Initialize Cloud Anchor variables.
+        firebaseManager = new FirebaseManager(this);
+        currentMode = HostResolveMode.NONE;
+        sharedPreferences = getSharedPreferences(PREFERENCE_FILE_KEY, Context.MODE_PRIVATE);
 
-    Spinner dest_dropdown = findViewById(R.id.dest_spinner);
-    dest_dropdown.setVisibility(View.GONE);
+        Spinner dest_dropdown = findViewById(R.id.dest_spinner);
+        dest_dropdown.setVisibility(View.GONE);
 
-  }
+    }
 
     private void initializeScene(Scene scene) {
         scene.setOnTouchListener(this::onTap);
@@ -288,123 +288,124 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     private boolean onTap(HitTestResult hitTestResult, MotionEvent motionEvent) {
 
-    synchronized (singleTapLock) {
-      synchronized (anchorLock) {
-        long currentTime = System.currentTimeMillis();
-        if (timeOfLastTouch + 500 < currentTime) {
-          timeOfLastTouch = System.currentTimeMillis();
-          // Only process taps when hosting.
-          if (currentMode != HostResolveMode.HOSTING) {
-            return false;
-          }
+        synchronized (singleTapLock) {
+            synchronized (anchorLock) {
+                long currentTime = System.currentTimeMillis();
+                if (timeOfLastTouch + 500 < currentTime) {
+                    timeOfLastTouch = System.currentTimeMillis();
+                    // Only process taps when hosting.
+                    if (currentMode != HostResolveMode.HOSTING) {
+                        return false;
+                    }
 
-          Frame frame = arFragment.getArSceneView().getArFrame();
-          TrackingState cameraTrackingState = frame.getCamera().getTrackingState();
-          // Only handle a tap if the anchor is currently null, the queued tap is non-null and the
-          // camera is currently tracking.
-          if (motionEvent != null && cameraTrackingState == TrackingState.TRACKING) {
-            Preconditions.checkState(
-                    currentMode == HostResolveMode.HOSTING,
-                    "We should only be creating an anchor in hosting mode.");
-            for (HitResult hit : frame.hitTest(motionEvent)) {
+                    Frame frame = arFragment.getArSceneView().getArFrame();
+                    TrackingState cameraTrackingState = frame.getCamera().getTrackingState();
+                    // Only handle a tap if the anchor is currently null, the queued tap is non-null and the
+                    // camera is currently tracking.
+                    if (motionEvent != null && cameraTrackingState == TrackingState.TRACKING) {
+                        Preconditions.checkState(
+                                currentMode == HostResolveMode.HOSTING,
+                                "We should only be creating an anchor in hosting mode.");
+                        for (HitResult hit : frame.hitTest(motionEvent)) {
 
-              if (shouldCreateAnchorWithHit(hit)) {
+                            if (shouldCreateAnchorWithHit(hit)) {
 
-                newAnchor = hit.createAnchor();
-                promptForAnchorName();
+                                newAnchor = hit.createAnchor();
+                                promptForAnchorName();
 
 
-                return true; // Only handle the first valid hit.
-              }
+                                return true; // Only handle the first valid hit.
+                            }
+
+                        }
+                    }
+
+                }
+                return false;
+            }
+        }
+    }
+
+    private void createDestinationDropdown() {
+        Spinner dest_dropdown = findViewById(R.id.dest_spinner);
+        String[] items = new String[]{"1", "2", "three", "Select a Destination"};
+        final int num_items = items.length - 1;
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, items) {
+            public View getView(int position, View convertView, ViewGroup parent) {
+
+                View v = super.getView(position, convertView, parent);
+
+                ((TextView) v).setTextSize(16);
+
+                return v;
 
             }
-          }
 
-        }
-        return false;
-      }
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+
+                View v = super.getDropDownView(position, convertView, parent);
+
+                ((TextView) v).setGravity(Gravity.CENTER);
+
+                return v;
+
+            }
+
+            @Override
+            public int getCount() {
+                return (num_items); // Truncate the list
+            }
+        };
+        //set the spinners adapter to the previously created one.
+        dest_dropdown.setAdapter(adapter);
+        dest_dropdown.setPrompt("Select a Destination");
+        dest_dropdown.setOnItemSelectedListener(
+                new AdapterView.OnItemSelectedListener() {
+                    @Override
+                    public void onNothingSelected(AdapterView<?> adapterView) {
+                        Toast.makeText(getApplicationContext(), "No destination selected", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                        dest_name[0] = parent.getItemAtPosition(position).toString();
+                        Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
+                    }
+                });
+        dest_dropdown.setVisibility(View.VISIBLE);
+        dest_dropdown.setSelection(num_items);
+
     }
-  }
 
-  private void createDestinationDropdown(){
-      Spinner dest_dropdown = findViewById(R.id.dest_spinner);
-      String[] items = new String[]{"1", "2", "three", "Select a Destination"};
-      final int num_items = items.length - 1;
-      ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, items){
-        public View getView(int position, View convertView, ViewGroup parent) {
-
-          View v = super.getView(position, convertView, parent);
-
-          ((TextView) v).setTextSize(16);
-
-          return v;
-
-        }
-
-        public View getDropDownView(int position, View convertView,ViewGroup parent) {
-
-          View v = super.getDropDownView(position, convertView,parent);
-
-          ((TextView) v).setGravity(Gravity.CENTER);
-
-          return v;
-
-        }
-        @Override
-        public int getCount() {
-          return(num_items); // Truncate the list
-        }
-      };
-      //set the spinners adapter to the previously created one.
-      dest_dropdown.setAdapter(adapter);
-      dest_dropdown.setPrompt("Select a Destination");
-      dest_dropdown.setOnItemSelectedListener(
-        new AdapterView.OnItemSelectedListener() {
-          @Override
-          public void onNothingSelected(AdapterView<?> adapterView) {
-            Toast.makeText(getApplicationContext(), "No destination selected", Toast.LENGTH_SHORT).show();
-          }
-
-          @Override
-          public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-            dest_name[0] = parent.getItemAtPosition(position).toString();
-            Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
-          }
-        });
-    dest_dropdown.setVisibility(View.VISIBLE);
-    dest_dropdown.setSelection(num_items);
-
-  }
-
-  private void onReceivedAnchorData(String newAnchorName, ArrayList<String> newConnectedAnchors) {
-    anchorName = newAnchorName;
-    connectedAnchors = newConnectedAnchors;
-    Toast.makeText(getApplicationContext(), "Anchor Name is "+ anchorName + ", Connected Anchors are " + connectedAnchors.toString(), Toast.LENGTH_SHORT).show();
+    private void onReceivedAnchorData(String newAnchorName, ArrayList<String> newConnectedAnchors) {
+        anchorName = newAnchorName;
+        connectedAnchors = newConnectedAnchors;
+        Toast.makeText(getApplicationContext(), "Anchor Name is " + anchorName + ", Connected Anchors are " + connectedAnchors.toString(), Toast.LENGTH_SHORT).show();
 //        cloudManager.hostCloudAnchor(newAnchor, hostListener);
-    wasTappedThisFrame = false;
+        wasTappedThisFrame = false;
 
-    cloudManager.hostCloudAnchor(newAnchor, hostListener);
-  }
-
-  private void promptForAnchorName(){
-    synchronized (singleTapLock) {
-        anchorName = null;
-        Bundle bundle = new Bundle();
-
-        ArrayList<String> anchorNames = new ArrayList<String>();
-        anchorNames.add("Volvo");
-        anchorNames.add("BMW");
-        anchorNames.add("Ford");
-        anchorNames.add("Mazda");
-        bundle.putStringArrayList("anchorNames", anchorNames);
-
-        PromptAnchorData promptAnchorData = new PromptAnchorData();
-        promptAnchorData.setArguments(bundle);
-        promptAnchorData.setOkListener(this::onReceivedAnchorData);
-        promptAnchorData.show(getSupportFragmentManager(), "ResolveDialog");
+        cloudManager.hostCloudAnchor(newAnchor, hostListener);
     }
 
-  }
+    private void promptForAnchorName() {
+        synchronized (singleTapLock) {
+            anchorName = null;
+            Bundle bundle = new Bundle();
+
+            ArrayList<String> anchorNames = new ArrayList<String>();
+            anchorNames.add("Volvo");
+            anchorNames.add("BMW");
+            anchorNames.add("Ford");
+            anchorNames.add("Mazda");
+            bundle.putStringArrayList("anchorNames", anchorNames);
+
+            PromptAnchorData promptAnchorData = new PromptAnchorData();
+            promptAnchorData.setArguments(bundle);
+            promptAnchorData.setOkListener(this::onReceivedAnchorData);
+            promptAnchorData.show(getSupportFragmentManager(), "ResolveDialog");
+        }
+
+    }
 
     private void onFrame(FrameTime frameTime) {
         arFragment.onUpdate(frameTime);
@@ -681,14 +682,14 @@ public class CloudAnchorActivity extends AppCompatActivity
             return;
         }
 
-    if (!sharedPreferences.getBoolean(ALLOW_SHARE_IMAGES_KEY, false)) {
-      showNoticeDialog(this::onPrivacyAcceptedForResolve);
-    } else {
-      onPrivacyAcceptedForResolve();
-    }
+        if (!sharedPreferences.getBoolean(ALLOW_SHARE_IMAGES_KEY, false)) {
+            showNoticeDialog(this::onPrivacyAcceptedForResolve);
+        } else {
+            onPrivacyAcceptedForResolve();
+        }
 
-    createDestinationDropdown();
-  }
+        createDestinationDropdown();
+    }
 
     private void onPrivacyAcceptedForResolve() {
         ResolveDialogFragment dialogFragment = new ResolveDialogFragment();

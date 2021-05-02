@@ -24,7 +24,7 @@ public class PromptAnchorData extends DialogFragment {
         /**
          * This method is called by the dialog box when its OK button is pressed.
          *
-         * @param anchorName the anchor name
+         * @param anchorName       the anchor name
          * @param connectedAnchors the connected anchor names
          */
 
