@@ -18,6 +18,7 @@ import java.util.Set;
 
 public class CloudAnchorMap {
     private LinkedHashMap<Long, CloudAnchor> map = new LinkedHashMap<Long, CloudAnchor>();
+    private LinkedHashMap<String, Long> nameToId = new LinkedHashMap<>();
     private Set<Long> anchors = new HashSet<>();
     private LinkedHashMap<Long, List<Pair<Long, Float>>> adjacency = new LinkedHashMap<Long, List<Pair<Long, Float>>>();
 
@@ -34,6 +35,7 @@ public class CloudAnchorMap {
     public void add(CloudAnchor cloudAnchor) {
         map.put(cloudAnchor.getAnchorId(), cloudAnchor);
         anchors.add(cloudAnchor.getAnchorId());
+        nameToId.put(cloudAnchor.getAnchorName(), cloudAnchor.getAnchorId());
         List<Pair<Long, Float>> temp = new ArrayList<Pair<Long, Float>>();
         adjacency.put(cloudAnchor.getAnchorId(), temp);
         Log.i("cloudAnchorMap", "Anchor Id " + cloudAnchor.getAnchorId() + " inserted");
@@ -159,4 +161,13 @@ public class CloudAnchorMap {
         }
         return names;
     }
+
+    public ArrayList<Long> getIdsFromNames(ArrayList<String> names) {
+        ArrayList<Long> ids = new ArrayList<>();
+        for(String name : names){
+            ids.add(nameToId.get(name));
+        }
+        return ids;
+    }
+
 }
