@@ -6,9 +6,16 @@ import android.util.Pair;
 import com.google.ar.core.Anchor;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.NodeParent;
+import com.google.ar.sceneform.math.Vector3;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -17,10 +24,11 @@ import java.util.Map;
 import java.util.Set;
 
 public class CloudAnchorMap {
-    private LinkedHashMap<Long, CloudAnchor> map = new LinkedHashMap<Long, CloudAnchor>();
+    private LinkedHashMap<Long, CloudAnchor> map = new LinkedHashMap<>();
     private LinkedHashMap<String, Long> nameToId = new LinkedHashMap<>();
     private Set<Long> anchors = new HashSet<>();
-    private LinkedHashMap<Long, List<Pair<Long, Float>>> adjacency = new LinkedHashMap<Long, List<Pair<Long, Float>>>();
+    private LinkedHashMap<Long, List<Pair<Long, Float>>> adjacency = new LinkedHashMap<>();
+    private List<List<float[]>> relativeTransformations = new ArrayList<>();
 
     public void add(Anchor anchor, Long anchorId, NodeParent nodeParent) {
         CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorId, nodeParent);
@@ -135,12 +143,14 @@ public class CloudAnchorMap {
     }
 
     public AnchorNode getAnchorNodeById(Long anchorId) {
+        Log.i("getAnchorNodeById", String.valueOf(anchorId));
+        Log.i("getAnchorNodeById", String.valueOf(map.get(anchorId).getAnchorId()));
         return map.get(anchorId).getAnchorNode();
     }
 
     public void createEdge(Long anchorId1, Long anchorId2, Float weight) {
-        Pair<Long, Float> temp = new Pair<Long, Float>(anchorId2, weight);
-        Pair<Long, Float> temp2 = new Pair<Long, Float>(anchorId1, weight);
+        Pair<Long, Float> temp = new Pair<>(anchorId2, weight);
+        Pair<Long, Float> temp2 = new Pair<>(anchorId1, weight);
         adjacency.get(anchorId1).add(temp);
         adjacency.get(anchorId2).add(temp2);
     }
@@ -170,4 +180,50 @@ public class CloudAnchorMap {
         return ids;
     }
 
+    public void calculateRelativeTransformations() {
+        relativeTransformations.clear();
+        for (Map.Entry<Long, CloudAnchor> entry1 : map.entrySet()) {
+            ArrayList<float[]> rel = new ArrayList<>();
+            for (Map.Entry<Long, CloudAnchor> entry2 : map.entrySet()) {
+                Log.i("relativeTransformations", entry1.getKey() + ", " + entry2.getKey());
+                if (entry1.getKey() == entry2.getKey()) {
+                    rel.add(new float[]{0, 0, 0});
+                } else {
+                    float[] pos1 = entry1.getValue().getAnchor().getPose().getTranslation();
+                    float[] pos2 = entry2.getValue().getAnchor().getPose().getTranslation();
+                    rel.add(new float[]{pos1[0]-pos2[0], pos1[1]-pos2[1], pos1[2]-pos2[2]});
+                }
+            }
+            relativeTransformations.add(rel);
+        }
+    }
+
+    public List<List<float[]>> getRelativeTransformations() {
+        return relativeTransformations;
+    }
+
+    public String serializeRelativeTransformations() throws IOException {
+        for (int i = 0; i < relativeTransformations.size(); i++) {
+            Log.i("relativeTransformations", String.valueOf(relativeTransformations.get(i).size()));
+        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(relativeTransformations);
+        oos.close();
+        return Base64.getEncoder().encodeToString(baos.toByteArray());
+    }
+
+    public void setRelativeTransformations(String s) throws IOException, ClassNotFoundException {
+        byte[] data = Base64.getDecoder().decode(s);
+        ObjectInputStream ois = new ObjectInputStream(
+                new ByteArrayInputStream(data));
+        Object o = ois.readObject();
+        ois.close();
+        relativeTransformations = (List<List<float[]>>)o;
+        Log.i("relativeTransformations", relativeTransformations.toString());
+        Log.i("relativeTransformations", String.valueOf(relativeTransformations.get(1).get(1)[0]));
+        for (int i = 0; i < relativeTransformations.size(); i++) {
+            Log.i("relativeTransformations", String.valueOf(relativeTransformations.get(i).size()));
+        }
+    }
 }

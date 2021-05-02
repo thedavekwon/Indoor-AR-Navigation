@@ -26,6 +26,7 @@ import com.google.ar.core.Anchor.CloudAnchorState;
 import com.google.ar.core.Session;
 import com.google.common.base.Preconditions;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -49,7 +50,7 @@ class CloudAnchorManager {
         /**
          * This method is invoked when the results of a Cloud Anchor operation are available.
          */
-        void onCloudTaskComplete(Anchor anchor);
+        void onCloudTaskComplete(Anchor anchor) throws IOException;
     }
 
     /**
@@ -111,7 +112,7 @@ class CloudAnchorManager {
      * Should be called after a {@link Session#update()} call.
      */
 
-    synchronized void onUpdate() {
+    synchronized void onUpdate() throws IOException {
         Preconditions.checkNotNull(session, "The session cannot be null.");
         Iterator<Map.Entry<Anchor, CloudAnchorHostListener>> hostIter =
                 pendingHostAnchors.entrySet().iterator();

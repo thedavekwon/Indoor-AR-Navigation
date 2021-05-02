@@ -84,9 +84,11 @@ import com.google.ar.sceneform.ux.ArFragment;
 import com.google.common.base.Preconditions;
 import com.google.firebase.database.DatabaseError;
 
+import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 public class CloudAnchorActivity extends AppCompatActivity
@@ -403,7 +405,11 @@ public class CloudAnchorActivity extends AppCompatActivity
 
         cloudManager.setSession(arFragment.getArSceneView().getSession());
         // Notify the cloudManager of all the updates.
-        cloudManager.onUpdate();
+        try {
+            cloudManager.onUpdate();
+        } catch (IOException exception) {
+            exception.printStackTrace();
+        }
 
         // If not tracking, don't draw 3d objects.
         if (cameraTrackingState == TrackingState.PAUSED) {
@@ -649,16 +655,26 @@ public class CloudAnchorActivity extends AppCompatActivity
         cloudAnchorMap.clear();
     }
 
+    private void renderPath() {
+        // Need to pass source and destination anchorIds
+        if (cloudAnchorMap.size() >= 2) {
+            // TEMPORARY
+            ArrayList<Long> anchorIds = cloudAnchorMap.getAnchorIds();
+            Log.i("CloudAnchorMap", anchorIds.toString());
+            for (int i = 0; i < anchorIds.size() - 1; i++) {
+                renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(anchorIds.get(i)), cloudAnchorMap.getAnchorNodeById(anchorIds.get(i + 1)));
+            }
+//            renderWaypoint(cloudAnchorMap.getAnchorNodeById(Collections.max(anchorIds)));
+        }
+        if (anchorNode != null) {
+            Log.i("CloudAnchorMap", anchorNode.getName());
+            renderTempAnchor(anchorNode);
+        }
+    }
+
     private void renderPath(Long sourceId, Long destId) {
         // Need to pass source and destination anchorIds
         if (cloudAnchorMap.hasPath(sourceId, destId) && cloudAnchorMap.size() >= 2) {
-//      for(long i = 1; i < cloudAnchorMap.size(); i++){
-//        renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(i - 1), cloudAnchorMap.getAnchorNodeById(i));
-//
-//        if(i == cloudAnchorMap.size() - 1){
-//          renderWaypoint(cloudAnchorMap.getAnchorNodeById(i));
-//        }
-//      }
             // TEMPORARY
             ArrayList<Long> anchorIds = cloudAnchorMap.getAnchorIds();
             Log.i("CloudAnchorMap", anchorIds.toString());
@@ -747,7 +763,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         synchronized (anchorsLock) {
             cloudAnchor.setAnchorNode(arFragment.getArSceneView().getScene());
             cloudAnchorMap.add(cloudAnchor);
-
+            renderPath();
         }
     }
 
@@ -763,9 +779,16 @@ public class CloudAnchorActivity extends AppCompatActivity
         Log.i("roomCode", String.valueOf(roomCode));
         firebaseManager.registerNewListenerForRoom(
                 roomCode,
-                resolvingAnchors -> {
+                (resolvingAnchors, serializedRelativeTransformations) -> {
                     CloudAnchorResolveStateListener resolveListener =
                             new CloudAnchorResolveStateListener(this, roomCode);
+                    try {
+                        cloudAnchorMap.setRelativeTransformations(serializedRelativeTransformations);
+                    } catch (IOException exception) {
+                        exception.printStackTrace();
+                    } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
+                    }
                     Preconditions.checkNotNull(resolveListener, "The resolve listener cannot be null.");
                     for (int i = 0; i < resolvingAnchors.size(); i++) {
                         cloudManager.resolveCloudAnchor(
@@ -789,7 +812,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         private Pose cloudAnchorPose;
 
         @Override
-        public void onNewRoomCode(Context currentContext, Long newRoomCode) {
+        public void onNewRoomCode(Context currentContext, Long newRoomCode) throws IOException {
             Preconditions.checkState(roomCode == null, "The room code cannot have been set before.");
             context = currentContext;
             roomCode = newRoomCode;
@@ -814,7 +837,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         }
 
         @Override
-        public void onCloudTaskComplete(Anchor anchor) {
+        public void onCloudTaskComplete(Anchor anchor) throws IOException {
             CloudAnchorState cloudState = anchor.getCloudAnchorState();
             if (cloudState.isError()) {
                 Log.e(TAG, "Error hosting a cloud anchor, state " + cloudState);
@@ -830,15 +853,18 @@ public class CloudAnchorActivity extends AppCompatActivity
             checkAndMaybeShare();
         }
 
-        private void checkAndMaybeShare() {
+        private void checkAndMaybeShare() throws IOException {
             if (roomCode == null || roomIdx == null || cloudAnchorId == null || cloudAnchorPose == null) {
                 return;
             }
-            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose);
+
             CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorName, cloudAnchorId, roomIdx, arFragment.getArSceneView().getScene());
 
             setNewAnchor(cloudAnchor);
             cloudAnchorMap.add(cloudAnchor);
+            cloudAnchorMap.calculateRelativeTransformations();
+
+            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose, cloudAnchorMap.serializeRelativeTransformations());
 
             ArrayList<Long> connectedAnchorIds = cloudAnchorMap.getIdsFromNames(connectedAnchors);
             for(Long id: connectedAnchorIds){
@@ -857,6 +883,9 @@ public class CloudAnchorActivity extends AppCompatActivity
             setNewAnchor(null, false);
             cloudAnchorId = null;
             cloudAnchorPose = null;
+            snackbarHelper.showMessageWithDismiss(
+                    CloudAnchorActivity.this, "reset complete");
+            Log.i("reset", "reset");
         }
     }
 
@@ -888,24 +917,25 @@ public class CloudAnchorActivity extends AppCompatActivity
             cloudAnchor.setStartAnchor();
             setNewAnchor(cloudAnchor);
 
-            float[] resolvedTranslation = cloudAnchor.getAnchor().getPose().getTranslation();
-            Vector3 resolvedAnchorMappedTranslation = new Vector3(resolvedTranslation[0], resolvedTranslation[1], resolvedTranslation[2]);
-            Vector3 storedAnchorMappedTranslation = cloudAnchor.getMappedTranslation();
+            snackbarHelper.showMessageWithDismiss(
+                    CloudAnchorActivity.this, "resolved " + cloudAnchor.getAnchorName());
 
-            Vector3 calib = Vector3.subtract(resolvedAnchorMappedTranslation, storedAnchorMappedTranslation);
-
+            List<float[]> transformations = cloudAnchorMap.getRelativeTransformations().get(cloudAnchor.getAnchorId().intValue());
+            float[] cur = cloudAnchor.getAnchor().getPose().getTranslation();
             // pre-populate all other anchors
             for (CloudAnchor otherAnchor : cloudAnchors) {
                 if (otherAnchor.getAnchorId() == cloudAnchor.getAnchorId()) {
                     // skip resolved anchor
                     continue;
                 }
-                Vector3 adjustedMappedTranslation = Vector3.add(otherAnchor.getMappedTranslation(), calib);
-                float[] pos = {adjustedMappedTranslation.x, adjustedMappedTranslation.y, adjustedMappedTranslation.z};
+
+                float[] rel = transformations.get(otherAnchor.getAnchorId().intValue());
+                float[] pos = {cur[0]-rel[0], cur[1]-rel[1], cur[2]-rel[2]};
                 float[] rot = {0f, 0f, 0f, 0f};
                 Anchor oAnchor = arFragment.getArSceneView().getSession().createAnchor(new Pose(pos, rot));
                 otherAnchor.setAnchor(oAnchor);
                 setNewAnchor(otherAnchor);
+                Log.i("resolve other", otherAnchor.getAnchorName());
             }
         }
 

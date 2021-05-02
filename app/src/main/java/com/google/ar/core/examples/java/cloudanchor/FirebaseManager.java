@@ -21,6 +21,7 @@ import android.util.Log;
 import android.util.Pair;
 
 import com.google.ar.core.Pose;
+import com.google.ar.sceneform.math.Vector3;
 import com.google.common.base.Preconditions;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.database.DataSnapshot;
@@ -31,10 +32,12 @@ import com.google.firebase.database.MutableData;
 import com.google.firebase.database.Transaction;
 import com.google.firebase.database.ValueEventListener;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -52,7 +55,7 @@ class FirebaseManager {
         /**
          * Invoked when a new room code is available from Firebase.
          */
-        void onNewRoomCode(Context currentContext, Long newRoomCode);
+        void onNewRoomCode(Context currentContext, Long newRoomCode) throws IOException;
 
         /**
          * Invoked if a Firebase Database Error happened while fetching the room code.
@@ -78,7 +81,7 @@ class FirebaseManager {
         /**
          * Invoked when a new cloud anchor ID is available.
          */
-        void onCloudAnchorIds(ArrayList<CloudAnchor> resolvingAnchors);
+        void onCloudAnchorIds(ArrayList<CloudAnchor> resolvingAnchors, String serializedRelativeTransformations);
     }
 
     // Names of the nodes used in the Firebase Database
@@ -91,6 +94,7 @@ class FirebaseManager {
     private static final String KEY_ANCHOR_ID = "hosted_anchor_id";
     private static final String KEY_TIMESTAMP = "updated_at_timestamp";
     private static final String KEY_ANCHOR_TRANSLATION = "anchor_translation";
+    private static final String KEY_RELATIVE_TRANSFORMATION = "relative_transformation";
     private static final String DISPLAY_NAME_VALUE = "Android EAP Sample";
 
     private final FirebaseApp app;
@@ -156,7 +160,11 @@ class FirebaseManager {
                             return;
                         }
                         Long roomCode = currentData.getValue(Long.class);
-                        listener.onNewRoomCode(cloudAnchorManagerContext, roomCode);
+                        try {
+                            listener.onNewRoomCode(cloudAnchorManagerContext, roomCode);
+                        } catch (IOException exception) {
+                            exception.printStackTrace();
+                        }
                     }
                 });
     }
@@ -164,7 +172,7 @@ class FirebaseManager {
     /**
      * Stores the given anchor ID in the given room code.
      */
-    void storeAnchorIdInRoom(Long roomCode, Long roomIdx, String cloudAnchorId, String cloudAnchorName, Pose cloudAnchorPose) {
+    void storeAnchorIdInRoom(Long roomCode, Long roomIdx, String cloudAnchorId, String cloudAnchorName, Pose cloudAnchorPose, String serializedRelativeTransformations) {
         Preconditions.checkNotNull(app, "Firebase App was null");
         DatabaseReference roomRef = hotspotListRef.child(String.valueOf(roomCode));
         DatabaseReference roomIdxRef = hotspotListRef.child(String.valueOf(roomCode)).child(String.valueOf(roomIdx));
@@ -175,6 +183,7 @@ class FirebaseManager {
         }
 
         roomRef.child(ROOM_LAST_IDX).setValue(roomIdx);
+        roomRef.child(KEY_RELATIVE_TRANSFORMATION).setValue(serializedRelativeTransformations);
         roomIdxRef.child(KEY_ANCHOR_NAME).setValue(cloudAnchorName);
         roomIdxRef.child(KEY_ANCHOR_ID).setValue(cloudAnchorId);
         roomIdxRef.child(KEY_TIMESTAMP).setValue(System.currentTimeMillis());
@@ -219,6 +228,7 @@ class FirebaseManager {
                     @Override
                     public void onDataChange(DataSnapshot dataSnapshot) {
                         Object valObj = dataSnapshot.child(ROOM_LAST_IDX).getValue();
+                        Object relativeTransformationsObj = dataSnapshot.child(KEY_RELATIVE_TRANSFORMATION).getValue();
                         if (valObj != null) {
                             Long lastIdx = Long.parseLong(String.valueOf(valObj));
                             ArrayList<CloudAnchor> resolvingAnchors = new ArrayList<>();
@@ -236,8 +246,10 @@ class FirebaseManager {
                                     resolvingAnchors.add(new CloudAnchor(i, anchorName, cloudAnchorId, cloudAnchorTranslation));
                                 }
                             }
-                            listener.onCloudAnchorIds(resolvingAnchors);
+                            String serializedRelativeTransformations = String.valueOf(relativeTransformationsObj);
+                            listener.onCloudAnchorIds(resolvingAnchors, serializedRelativeTransformations);
                         }
+
                     }
 
                     @Override
