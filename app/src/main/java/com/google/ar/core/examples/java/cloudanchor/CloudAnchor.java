@@ -21,6 +21,7 @@ public class CloudAnchor {
     private Long anchorId;
     private String cloudAnchorId;
     private boolean isDisplay = true;
+    private boolean startAnchor = false;
 
     private Vector3 mappedTranslation = null;
 
@@ -101,4 +102,8 @@ public class CloudAnchor {
     public String getAnchorName() {
         return this.anchorName;
     }
+
+    public Vector3 getMappedTranslation() { return this.mappedTranslation; }
+
+    public void setStartAnchor() {this.startAnchor = true;}
 }

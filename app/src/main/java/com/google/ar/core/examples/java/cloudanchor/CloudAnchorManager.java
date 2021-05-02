@@ -18,7 +18,6 @@ package com.google.ar.core.examples.java.cloudanchor;
 
 import android.os.SystemClock;
 import android.util.Log;
-import android.util.Pair;
 
 import androidx.annotation.Nullable;
 
@@ -30,6 +29,7 @@ import com.google.common.base.Preconditions;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A helper class to handle all the Cloud Anchors logic, and add a callback-like mechanism on top of
@@ -60,7 +60,7 @@ class CloudAnchorManager {
         /**
          * This method is invoked when the results of a Cloud Anchor operation are available.
          */
-        void onCloudTaskComplete(CloudAnchor cloudAnchor);
+        void onCloudTaskComplete(CloudAnchor cloudAnchor, Set<CloudAnchor> cloudAnchors);
 
         /**
          * This method show the toast message.
@@ -134,8 +134,11 @@ class CloudAnchorManager {
             Log.i("anchor", "anchor resolving: " + entry.getKey().getCloudAnchorId());
             Log.i("anchor", "anchor resolving status: " + entry.getKey().getAnchor().getCloudAnchorState().toString());
             if (isReturnableState(entry.getKey().getAnchor().getCloudAnchorState())) {
-                listener.onCloudTaskComplete(entry.getKey());
-                resolveIter.remove();
+                listener.onCloudTaskComplete(entry.getKey(), pendingResolveAnchors.keySet());
+                // resolveIter.remove();
+                // TODO clear all pending anchors
+                pendingResolveAnchors.clear();
+                break;
             }
             if (deadlineForMessageMillis > 0 && SystemClock.uptimeMillis() > deadlineForMessageMillis) {
                 listener.onShowResolveMessage();
