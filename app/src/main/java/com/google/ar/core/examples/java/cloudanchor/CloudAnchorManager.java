@@ -136,7 +136,6 @@ class CloudAnchorManager {
             if (isReturnableState(entry.getKey().getAnchor().getCloudAnchorState())) {
                 listener.onCloudTaskComplete(entry.getKey(), pendingResolveAnchors.keySet());
                 // resolveIter.remove();
-                // TODO clear all pending anchors
                 pendingResolveAnchors.clear();
                 break;
             }
