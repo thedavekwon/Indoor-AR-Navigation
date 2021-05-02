@@ -381,7 +381,6 @@ public class CloudAnchorActivity extends AppCompatActivity
         anchorName = newAnchorName;
         connectedAnchors = newConnectedAnchors;
         Toast.makeText(getApplicationContext(), "Anchor Name is " + anchorName + ", Connected Anchors are " + connectedAnchors.toString(), Toast.LENGTH_SHORT).show();
-//        cloudManager.hostCloudAnchor(newAnchor, hostListener);
         wasTappedThisFrame = false;
 
         cloudManager.hostCloudAnchor(newAnchor, hostListener);
@@ -392,12 +391,7 @@ public class CloudAnchorActivity extends AppCompatActivity
             anchorName = null;
             Bundle bundle = new Bundle();
 
-            ArrayList<String> anchorNames = new ArrayList<String>();
-            anchorNames.add("Volvo");
-            anchorNames.add("BMW");
-            anchorNames.add("Ford");
-            anchorNames.add("Mazda");
-            bundle.putStringArrayList("anchorNames", anchorNames);
+            bundle.putStringArrayList("anchorNames", cloudAnchorMap.getAllNames());
 
             PromptAnchorData promptAnchorData = new PromptAnchorData();
             promptAnchorData.setArguments(bundle);
@@ -562,43 +556,6 @@ public class CloudAnchorActivity extends AppCompatActivity
     }
 
     /**
-     * Handles the most recent user tap.
-     *
-     * <p>We only ever handle one tap at a time, since this app only allows for a single anchor.
-     *
-     * @param frame               the current AR frame
-     * @param cameraTrackingState the current camera tracking state
-     */
-    private void handleTap(Frame frame, TrackingState cameraTrackingState) {
-        // Handle taps. Handling only one tap per frame, as taps are usually low frequency
-        // compared to frame rate.
-        synchronized (singleTapLock) {
-            synchronized (anchorLock) {
-                // Only handle a tap if the anchor is currently null, the queued tap is non-null and the
-                // camera is currently tracking.
-                if (anchor == null
-                        && queuedSingleTap != null
-                        && cameraTrackingState == TrackingState.TRACKING) {
-                    Preconditions.checkState(
-                            currentMode == HostResolveMode.HOSTING,
-                            "We should only be creating an anchor in hosting mode.");
-                    for (HitResult hit : frame.hitTest(queuedSingleTap)) {
-                        if (shouldCreateAnchorWithHit(hit)) {
-                            Anchor newAnchor = hit.createAnchor();
-                            Preconditions.checkNotNull(hostListener, "The host listener cannot be null.");
-                            cloudManager.hostCloudAnchor(newAnchor, hostListener);
-                            setNewAnchor(newAnchor);
-                            snackbarHelper.showMessage(this, getString(R.string.snackbar_anchor_placed));
-                            break; // Only handle the first valid hit.
-                        }
-                    }
-                }
-            }
-            queuedSingleTap = null;
-        }
-    }
-
-    /**
      * Returns {@code true} if and only if the hit can be used to create an Anchor reliably.
      */
     private static boolean shouldCreateAnchorWithHit(HitResult hit) {
@@ -621,7 +578,6 @@ public class CloudAnchorActivity extends AppCompatActivity
                 anchorNode.setParent(arFragment.getArSceneView().getScene());
                 Log.i("anchor", "new anchor added");
                 Log.i("anchor", String.valueOf(anchorNode == null));
-                // renderPath();
             }
         }
     }
@@ -813,7 +769,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         synchronized (anchorsLock) {
             cloudAnchor.setAnchorNode(arFragment.getArSceneView().getScene());
             cloudAnchorMap.add(cloudAnchor);
-            // renderPath();
+
         }
     }
 
@@ -901,8 +857,18 @@ public class CloudAnchorActivity extends AppCompatActivity
                 return;
             }
             firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose);
-//            setNewAnchor(new CloudAnchor(anchor, anchorName, cloudAnchorId, roomIdx, arFragment.getArSceneView().getScene()));
-//            setNewAnchor(anchor);
+            CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorName, cloudAnchorId, roomIdx, arFragment.getArSceneView().getScene());
+
+            setNewAnchor(cloudAnchor);
+            cloudAnchorMap.add(cloudAnchor);
+
+            ArrayList<Long> connectedAnchorIds = cloudAnchorMap.getIdsFromNames(connectedAnchors);
+            for(Long id: connectedAnchorIds){
+                //change weight to distance
+                cloudAnchorMap.createEdge(roomIdx, id, 1.0f);
+            }
+
+
             roomIdx++;
             snackbarHelper.showMessageWithDismiss(
                     CloudAnchorActivity.this, getString(R.string.snackbar_cloud_id_shared));
