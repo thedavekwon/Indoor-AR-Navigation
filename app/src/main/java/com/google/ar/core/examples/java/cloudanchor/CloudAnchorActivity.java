@@ -379,6 +379,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                         dest_name[0] = parent.getItemAtPosition(position).toString();
                         if(dest_name[0] != null && !dest_name[0].equals(DEST_DROPDOWN_PROMPT)){
                             long source_id = findClosestAnchor();
+                            renderLineFromCameraToAnchor( cloudAnchorMap.getAnchorNodeById(source_id));
                             System.out.println(dest_name[0]);
                             Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
                             long dest_id = cloudAnchorMap.getIdFromName(dest_name[0]);
@@ -750,6 +751,39 @@ public class CloudAnchorActivity extends AppCompatActivity
         }
     }
 
+    void renderLineFromCameraToAnchor(AnchorNode anchorNode){
+        Vector3 point1 = anchorNode.getWorldPosition();
+        Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
+        Vector3 point2 = new Vector3(cameraPose.tx(), 0, cameraPose.tz());
+
+        final Vector3 difference = Vector3.subtract(point1, point2);
+        final Vector3 directionFromTopToBottom = difference.normalized();
+        final Quaternion rotationFromAToB =
+                Quaternion.lookRotation(directionFromTopToBottom, Vector3.up());
+
+         /* Then, create a rectangular prism, using ShapeFactory.makeCube() and use the difference vector
+         to extend to the necessary length.  */
+        MaterialFactory.makeOpaqueWithColor(getApplicationContext(), new Color(0, 255, 244))
+                .thenAccept(
+                        material -> {
+                            /* Then, create a rectangular prism, using ShapeFactory.makeCube() and use the difference vector
+                                   to extend to the necessary length.  */
+                            ModelRenderable model = ShapeFactory.makeCube(
+                                    new Vector3(.01f, .01f, difference.length()),
+                                    Vector3.zero(), material);
+                            /* Last, set the world rotation of the node to the rotation calculated earlier and set the world position to
+                                   the midpoint between the given points . */
+                            Node node = new Node();
+                            node.setParent(anchorNode);
+                            node.setRenderable(model);
+                            node.setWorldPosition(Vector3.add(point1, point2).scaled(.5f));
+                            node.setWorldRotation(rotationFromAToB);
+                        }
+                );
+
+
+    }
+
     private void renderLineBetweenTwoAnchorNodes(AnchorNode prev, AnchorNode curr) {
         Vector3 point1 = curr.getWorldPosition();
         Vector3 point2 = prev.getWorldPosition();
@@ -1011,5 +1045,6 @@ public class CloudAnchorActivity extends AppCompatActivity
 
         return minDistCloudAnchorId;
     }
+
 
 }
