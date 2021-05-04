@@ -10,4 +10,12 @@ public class Edge implements Serializable {
         this.id = id;
         this.weight = weight;
     }
+
+    @Override
+    public String toString() {
+        return "Edge{" +
+                "id=" + id +
+                ", weight=" + weight +
+                '}';
+    }
 }

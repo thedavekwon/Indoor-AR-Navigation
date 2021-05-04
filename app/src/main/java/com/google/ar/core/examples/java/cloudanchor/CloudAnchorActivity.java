@@ -689,6 +689,8 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     private void renderPath(Long sourceId, Long destId) {
         // Need to pass source and destination anchorIds
+        System.out.println("Source id: " + sourceId.toString() +", Dest id: " + destId.toString());
+        System.out.println(cloudAnchorMap.getAdjacency());
         if (cloudAnchorMap.hasPath(sourceId, destId) && cloudAnchorMap.size() >= 2) {
             System.out.println("It has a path");
 //      for(long i = 1; i < cloudAnchorMap.size(); i++){
@@ -705,6 +707,8 @@ public class CloudAnchorActivity extends AppCompatActivity
                 renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(anchorIds.get(i)), cloudAnchorMap.getAnchorNodeById(anchorIds.get(i + 1)));
             }
             renderWaypoint(cloudAnchorMap.getAnchorNodeById(Collections.max(anchorIds)));
+        } else {
+            System.out.println("No path found");
         }
         if (anchorNode != null) {
             Log.i("CloudAnchorMap", anchorNode.getName());
