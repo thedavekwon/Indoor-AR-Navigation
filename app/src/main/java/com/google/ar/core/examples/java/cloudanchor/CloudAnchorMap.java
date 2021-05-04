@@ -7,8 +7,15 @@ import com.google.ar.core.Anchor;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.NodeParent;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -20,24 +27,24 @@ public class CloudAnchorMap {
     private LinkedHashMap<Long, CloudAnchor> map = new LinkedHashMap<Long, CloudAnchor>();
     private LinkedHashMap<String, Long> nameToId = new LinkedHashMap<>();
     private Set<Long> anchors = new HashSet<>();
-    private LinkedHashMap<Long, List<Pair<Long, Float>>> adjacency = new LinkedHashMap<Long, List<Pair<Long, Float>>>();
+    private List<List<Edge>> adjacency = new ArrayList<List<Edge>>();
 
     public void add(Anchor anchor, Long anchorId, NodeParent nodeParent) {
         CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorId, nodeParent);
         map.put(cloudAnchor.getAnchorId(), cloudAnchor);
         anchors.add(cloudAnchor.getAnchorId());
-        List<Pair<Long, Float>> temp = new ArrayList<Pair<Long, Float>>();
-        adjacency.put(cloudAnchor.getAnchorId(), temp);
+        List<Edge> temp = new ArrayList<Edge>();
+        adjacency.add(temp);
         Log.i("cloudAnchorMap", "Anchor Id " + anchorId + " inserted");
         Log.i("adjacency", "Anchor Id " + cloudAnchor.getAnchorId() + " inserted");
     }
 
-    public void add(CloudAnchor cloudAnchor) {
+    public void add(CloudAnchor cloudAnchor, boolean resolve) {
         map.put(cloudAnchor.getAnchorId(), cloudAnchor);
         anchors.add(cloudAnchor.getAnchorId());
         nameToId.put(cloudAnchor.getAnchorName(), cloudAnchor.getAnchorId());
-        List<Pair<Long, Float>> temp = new ArrayList<Pair<Long, Float>>();
-        adjacency.put(cloudAnchor.getAnchorId(), temp);
+        List<Edge> temp = new ArrayList<Edge>();
+        if (!resolve) adjacency.add(temp);
         Log.i("cloudAnchorMap", "Anchor Id " + cloudAnchor.getAnchorId() + " inserted");
         Log.i("adjacency", "Anchor Id " + cloudAnchor.getAnchorId() + " inserted");
     }
@@ -93,13 +100,13 @@ public class CloudAnchorMap {
             }
             visited.add(currentAnchor);
 
-            for (Pair<Long, Float> edge : adjacency.get(currentAnchor)) {
-                if (visited.contains(edge.first))
+            for (Edge edge : adjacency.get(currentAnchor.intValue())) {
+                if (visited.contains(edge.id))
                     continue;
 
-                if (shortestPath.get(currentAnchor) + edge.second < shortestPath.get(edge.first)) {
-                    shortestPath.put(edge.first, shortestPath.get(currentAnchor) + edge.second);
-                    parentTrack.put(edge.first, currentAnchor);
+                if (shortestPath.get(currentAnchor) + edge.weight < shortestPath.get(edge.id)) {
+                    shortestPath.put(edge.id, shortestPath.get(currentAnchor) + edge.weight);
+                    parentTrack.put(edge.id, currentAnchor);
                 }
             }
 
@@ -139,10 +146,10 @@ public class CloudAnchorMap {
     }
 
     public void createEdge(Long anchorId1, Long anchorId2, Float weight) {
-        Pair<Long, Float> temp = new Pair<Long, Float>(anchorId2, weight);
-        Pair<Long, Float> temp2 = new Pair<Long, Float>(anchorId1, weight);
-        adjacency.get(anchorId1).add(temp);
-        adjacency.get(anchorId2).add(temp2);
+        Edge temp = new Edge(anchorId2, weight);
+        Edge temp2 = new Edge(anchorId1, weight);
+        adjacency.get(anchorId1.intValue()).add(temp);
+        adjacency.get(anchorId2.intValue()).add(temp2);
     }
 
     public void clear() {
@@ -176,5 +183,31 @@ public class CloudAnchorMap {
 
     public Long getIdFromName(String name){
         return nameToId.get(name);
+    }
+
+    public List<List<Edge>> getAdjacency() {
+        return adjacency;
+    }
+
+    public String serializeAdjacency() throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        Log.i("adjacency", adjacency.toString());
+        oos.writeObject(adjacency);
+        oos.close();
+        return Base64.getEncoder().encodeToString(baos.toByteArray());
+    }
+
+    public void setAdjacency(String s) throws IOException, ClassNotFoundException {
+        byte[] data = Base64.getDecoder().decode(s);
+        ObjectInputStream ois = new ObjectInputStream(
+                new ByteArrayInputStream(data));
+        Object o = ois.readObject();
+        ois.close();
+        adjacency = (List<List<Edge>>)o;
+        Log.i("adjacency", adjacency.toString());
+        for (List<Edge> entry : adjacency) {
+            Log.i("adjacency", String.valueOf(entry.toString()));
+        }
     }
 }

@@ -261,7 +261,6 @@ public class CloudAnchorActivity extends AppCompatActivity
                         });
 
 
-
         // Initialize UI components.
         hostButton = findViewById(R.id.host_button);
         hostButton.setOnClickListener((view) -> onHostButtonPress());
@@ -377,7 +376,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                     @Override
                     public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                         dest_name[0] = parent.getItemAtPosition(position).toString();
-                        if(dest_name[0] != null && !dest_name[0].equals(DEST_DROPDOWN_PROMPT)){
+                        if (dest_name[0] != null && !dest_name[0].equals(DEST_DROPDOWN_PROMPT)) {
                             long source_id = findClosestAnchor();
                             renderLineFromCameraToAnchor( cloudAnchorMap.getAnchorNodeById(source_id));
                             System.out.println(dest_name[0]);
@@ -602,10 +601,10 @@ public class CloudAnchorActivity extends AppCompatActivity
     /**
      * Sets the new value of the current anchor. Detaches the old anchor, if it was non-null.
      */
-    private void setNewAnchor(CloudAnchor cloudAnchor) {
+    private void setNewAnchor(boolean resolve, CloudAnchor cloudAnchor) {
         synchronized (anchorLock) {
             if (cloudAnchor.getAnchor() != null)
-                newAddAnchorToList(cloudAnchor);
+                newAddAnchorToList(resolve, cloudAnchor);
         }
     }
 
@@ -816,13 +815,12 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     }
 
-    private void newAddAnchorToList(CloudAnchor cloudAnchor) {
+    private void newAddAnchorToList(boolean resolve, CloudAnchor cloudAnchor) {
         synchronized (anchorsLock) {
             cloudAnchor.setAnchorNode(arFragment.getArSceneView().getScene());
-            cloudAnchorMap.add(cloudAnchor);
+            cloudAnchorMap.add(cloudAnchor, resolve);
             renderAnchorName(cloudAnchor);
             createDestinationDropdown();
-
         }
     }
 
@@ -838,13 +836,20 @@ public class CloudAnchorActivity extends AppCompatActivity
         Log.i("roomCode", String.valueOf(roomCode));
         firebaseManager.registerNewListenerForRoom(
                 roomCode,
-                resolvingAnchors -> {
+                (resolvingAnchors, serializedAdjacency) -> {
                     CloudAnchorResolveStateListener resolveListener =
                             new CloudAnchorResolveStateListener(this, roomCode);
                     Preconditions.checkNotNull(resolveListener, "The resolve listener cannot be null.");
                     for (int i = 0; i < resolvingAnchors.size(); i++) {
                         cloudManager.resolveCloudAnchor(
                                 resolvingAnchors.get(i), resolveListener, SystemClock.uptimeMillis());
+                    }
+                    try {
+                        cloudAnchorMap.setAdjacency(serializedAdjacency);
+                    } catch (IOException exception) {
+                        exception.printStackTrace();
+                    } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
                     }
                 }
         );
@@ -909,20 +914,26 @@ public class CloudAnchorActivity extends AppCompatActivity
             if (roomCode == null || roomIdx == null || cloudAnchorId == null || cloudAnchorPose == null) {
                 return;
             }
-            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose);
+
             CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorName, cloudAnchorId, roomIdx, arFragment.getArSceneView().getScene());
 
-            setNewAnchor(cloudAnchor);
-            cloudAnchorMap.add(cloudAnchor);
+            setNewAnchor(false, cloudAnchor);
+//            cloudAnchorMap.add(cloudAnchor, false);
 
             ArrayList<Long> connectedAnchorIds = cloudAnchorMap.getIdsFromNames(connectedAnchors);
-            for(Long id: connectedAnchorIds){
+            for (Long id : connectedAnchorIds) {
                 //change weight to distance
                 cloudAnchorMap.createEdge(roomIdx, id, 1.0f);
                 AnchorNode anchorNode = cloudAnchorMap.getAnchorNodeById(id);
                 renderLineBetweenTwoAnchorNodes(anchorNode, cloudAnchor.getAnchorNode());
             }
-
+            String serializedAdjacency = "";
+            try {
+                serializedAdjacency = cloudAnchorMap.serializeAdjacency();
+            } catch (IOException exception) {
+                exception.printStackTrace();
+            }
+            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose, serializedAdjacency);
 
             roomIdx++;
             snackbarHelper.showMessageWithDismiss(
@@ -962,7 +973,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                         CloudAnchorActivity.this, getString(R.string.snackbar_resolve_error, cloudState));
                 return;
             }
-            setNewAnchor(cloudAnchor);
+            setNewAnchor(true, cloudAnchor);
         }
 
         @Override
@@ -988,7 +999,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         createSession();
     }
 
-    public void renderAnchorName(CloudAnchor cloudAnchor){
+    public void renderAnchorName(CloudAnchor cloudAnchor) {
 
         ViewRenderable.builder().setView(arFragment.getContext(), R.layout.anchor_name_display)
                 .build()
@@ -1014,11 +1025,11 @@ public class CloudAnchorActivity extends AppCompatActivity
                 });
     }
 
-    public Long findClosestAnchor(){
+    public Long findClosestAnchor() {
         Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
         Long minDistCloudAnchorId = null;
         float minDistance = Float.MAX_VALUE;
-        for(Long cloudAnchorId: cloudAnchorMap.getAnchorIds()){
+        for (Long cloudAnchorId : cloudAnchorMap.getAnchorIds()) {
             AnchorNode currAnchorNode = cloudAnchorMap.getAnchorNodeById(cloudAnchorId);
             Pose anchorPose = currAnchorNode.getAnchor().getPose();
 
@@ -1028,7 +1039,7 @@ public class CloudAnchorActivity extends AppCompatActivity
 
             ///Compute the straight-line distance.
             float distanceToAnchor = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if(distanceToAnchor < minDistance){
+            if (distanceToAnchor < minDistance) {
                 minDistance = distanceToAnchor;
                 minDistCloudAnchorId = cloudAnchorId;
             }
@@ -1036,7 +1047,7 @@ public class CloudAnchorActivity extends AppCompatActivity
 
         }
 
-        CloudAnchor minDistCloudAnchor =  cloudAnchorMap.getCloudAnchorById(minDistCloudAnchorId);
+        CloudAnchor minDistCloudAnchor = cloudAnchorMap.getCloudAnchorById(minDistCloudAnchorId);
 
         Toast toast =
                 Toast.makeText(this, "Closest Anchor is: " + minDistCloudAnchor.getAnchorName(), Toast.LENGTH_LONG);

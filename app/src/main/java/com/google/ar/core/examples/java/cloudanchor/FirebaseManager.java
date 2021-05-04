@@ -78,13 +78,14 @@ class FirebaseManager {
         /**
          * Invoked when a new cloud anchor ID is available.
          */
-        void onCloudAnchorIds(ArrayList<CloudAnchor> resolvingAnchors);
+        void onCloudAnchorIds(ArrayList<CloudAnchor> resolvingAnchors, String serializedAdjacency);
     }
 
     // Names of the nodes used in the Firebase Database
     private static final String ROOT_FIREBASE_HOTSPOTS = "hotspot_list";
     private static final String ROOT_LAST_ROOM_CODE = "last_room_code";
     private static final String ROOM_LAST_IDX = "last_idx_code";
+    private static final String ROOM_ADJACENCY = "adjacency";
 
     // Some common keys and values used when writing to the Firebase Database.
     private static final String KEY_ANCHOR_NAME = "display_name";
@@ -164,7 +165,7 @@ class FirebaseManager {
     /**
      * Stores the given anchor ID in the given room code.
      */
-    void storeAnchorIdInRoom(Long roomCode, Long roomIdx, String cloudAnchorId, String cloudAnchorName, Pose cloudAnchorPose) {
+    void storeAnchorIdInRoom(Long roomCode, Long roomIdx, String cloudAnchorId, String cloudAnchorName, Pose cloudAnchorPose, String serializeAdjacency) {
         Preconditions.checkNotNull(app, "Firebase App was null");
         DatabaseReference roomRef = hotspotListRef.child(String.valueOf(roomCode));
         DatabaseReference roomIdxRef = hotspotListRef.child(String.valueOf(roomCode)).child(String.valueOf(roomIdx));
@@ -175,6 +176,7 @@ class FirebaseManager {
         }
 
         roomRef.child(ROOM_LAST_IDX).setValue(roomIdx);
+        roomRef.child(ROOM_ADJACENCY).setValue(serializeAdjacency);
         roomIdxRef.child(KEY_ANCHOR_NAME).setValue(cloudAnchorName);
         roomIdxRef.child(KEY_ANCHOR_ID).setValue(cloudAnchorId);
         roomIdxRef.child(KEY_TIMESTAMP).setValue(System.currentTimeMillis());
@@ -219,6 +221,7 @@ class FirebaseManager {
                     @Override
                     public void onDataChange(DataSnapshot dataSnapshot) {
                         Object valObj = dataSnapshot.child(ROOM_LAST_IDX).getValue();
+                        Object adjacencyObj = dataSnapshot.child(ROOM_ADJACENCY).getValue();
                         if (valObj != null) {
                             Long lastIdx = Long.parseLong(String.valueOf(valObj));
                             ArrayList<CloudAnchor> resolvingAnchors = new ArrayList<>();
@@ -236,7 +239,8 @@ class FirebaseManager {
                                     resolvingAnchors.add(new CloudAnchor(i, anchorName, cloudAnchorId, cloudAnchorTranslation));
                                 }
                             }
-                            listener.onCloudAnchorIds(resolvingAnchors);
+                            String serializedAdjacency = String.valueOf(adjacencyObj);
+                            listener.onCloudAnchorIds(resolvingAnchors, serializedAdjacency);
                         }
                     }
 
