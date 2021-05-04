@@ -7,8 +7,14 @@ import com.google.ar.core.Anchor;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.NodeParent;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -176,5 +182,30 @@ public class CloudAnchorMap {
 
     public Long getIdFromName(String name){
         return nameToId.get(name);
+    }
+
+    public LinkedHashMap<Long, List<Pair<Long, Float>>> getAdjacency() {
+        return adjacency;
+    }
+
+    public String serializeAdjacency() throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(adjacency);
+        oos.close();
+        return Base64.getEncoder().encodeToString(baos.toByteArray());
+    }
+
+    public void setAdjacency(String s) throws IOException, ClassNotFoundException {
+        byte[] data = Base64.getDecoder().decode(s);
+        ObjectInputStream ois = new ObjectInputStream(
+                new ByteArrayInputStream(data));
+        Object o = ois.readObject();
+        ois.close();
+        adjacency = (LinkedHashMap<Long, List<Pair<Long, Float>>>)o;
+        Log.i("adjacency", adjacency.toString());
+        for (Map.Entry<Long, List<Pair<Long, Float>>> entry : adjacency.entrySet()) {
+            Log.i("adjacency", String.valueOf(entry.getValue().toString()));
+        }
     }
 }

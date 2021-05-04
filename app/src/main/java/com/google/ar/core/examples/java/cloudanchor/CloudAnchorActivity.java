@@ -804,13 +804,20 @@ public class CloudAnchorActivity extends AppCompatActivity
         Log.i("roomCode", String.valueOf(roomCode));
         firebaseManager.registerNewListenerForRoom(
                 roomCode,
-                resolvingAnchors -> {
+                (resolvingAnchors, serializedAdjacency) -> {
                     CloudAnchorResolveStateListener resolveListener =
                             new CloudAnchorResolveStateListener(this, roomCode);
                     Preconditions.checkNotNull(resolveListener, "The resolve listener cannot be null.");
                     for (int i = 0; i < resolvingAnchors.size(); i++) {
                         cloudManager.resolveCloudAnchor(
                                 resolvingAnchors.get(i), resolveListener, SystemClock.uptimeMillis());
+                    }
+                    try {
+                        cloudAnchorMap.setAdjacency(serializedAdjacency);
+                    } catch (IOException exception) {
+                        exception.printStackTrace();
+                    } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
                     }
                 }
         );
@@ -875,7 +882,7 @@ public class CloudAnchorActivity extends AppCompatActivity
             if (roomCode == null || roomIdx == null || cloudAnchorId == null || cloudAnchorPose == null) {
                 return;
             }
-            firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose);
+
             CloudAnchor cloudAnchor = new CloudAnchor(anchor, anchorName, cloudAnchorId, roomIdx, arFragment.getArSceneView().getScene());
 
             setNewAnchor(cloudAnchor);
@@ -889,6 +896,11 @@ public class CloudAnchorActivity extends AppCompatActivity
                 renderLineBetweenTwoAnchorNodes(anchorNode, cloudAnchor.getAnchorNode());
             }
 
+            try {
+                firebaseManager.storeAnchorIdInRoom(roomCode, roomIdx, cloudAnchorId, anchorName, cloudAnchorPose, cloudAnchorMap.serializeAdjacency());
+            } catch (IOException exception) {
+                exception.printStackTrace();
+            }
 
             roomIdx++;
             snackbarHelper.showMessageWithDismiss(
