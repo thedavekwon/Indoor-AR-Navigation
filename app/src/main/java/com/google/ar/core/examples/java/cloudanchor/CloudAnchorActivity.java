@@ -195,6 +195,9 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     private final String[] dest_name = new String[1];
 
+    private Spinner dest_dropdown;
+    private final String DEST_DROPDOWN_PROMPT = "Select a Destination";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -211,7 +214,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         WeakReference<CloudAnchorActivity> weakActivity = new WeakReference<>(this);
 
         //Directional Arrow
-
+/*
         ModelRenderable.builder()
                 .setSource(this, Uri.parse(
                         "https://storage.googleapis.com/ar-answers-in-search-models/static/Tiger/model.glb"))
@@ -231,6 +234,8 @@ public class CloudAnchorActivity extends AppCompatActivity
                     return null;
                 });
 
+
+ */
         ModelRenderable.builder()
                 .setSource(
                         this,
@@ -256,6 +261,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                         });
 
 
+
         // Initialize UI components.
         hostButton = findViewById(R.id.host_button);
         hostButton.setOnClickListener((view) -> onHostButtonPress());
@@ -268,7 +274,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         currentMode = HostResolveMode.NONE;
         sharedPreferences = getSharedPreferences(PREFERENCE_FILE_KEY, Context.MODE_PRIVATE);
 
-        Spinner dest_dropdown = findViewById(R.id.dest_spinner);
+        dest_dropdown = findViewById(R.id.dest_spinner);
         dest_dropdown.setVisibility(View.GONE);
 
     }
@@ -326,10 +332,12 @@ public class CloudAnchorActivity extends AppCompatActivity
         }
     }
 
+
     private void createDestinationDropdown() {
-        Spinner dest_dropdown = findViewById(R.id.dest_spinner);
-        String[] items = new String[]{"1", "2", "three", "Select a Destination"};
-        final int num_items = items.length - 1;
+        ArrayList<String> items = cloudAnchorMap.getAllNames();
+        items.add(DEST_DROPDOWN_PROMPT);
+        System.out.println("Destination items: " + items.toString());
+        final int num_items = items.size() - 1;
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, items) {
             public View getView(int position, View convertView, ViewGroup parent) {
 
@@ -358,7 +366,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         };
         //set the spinners adapter to the previously created one.
         dest_dropdown.setAdapter(adapter);
-        dest_dropdown.setPrompt("Select a Destination");
+        dest_dropdown.setPrompt(DEST_DROPDOWN_PROMPT);
         dest_dropdown.setOnItemSelectedListener(
                 new AdapterView.OnItemSelectedListener() {
                     @Override
@@ -369,7 +377,15 @@ public class CloudAnchorActivity extends AppCompatActivity
                     @Override
                     public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                         dest_name[0] = parent.getItemAtPosition(position).toString();
-                        Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
+                        if(dest_name[0] != null && !dest_name[0].equals(DEST_DROPDOWN_PROMPT)){
+                            long source_id = findClosestAnchor();
+                            System.out.println(dest_name[0]);
+                            Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
+                            long dest_id = cloudAnchorMap.getIdFromName(dest_name[0]);
+                            renderPath(source_id, dest_id);
+                        }
+
+
                     }
                 });
         dest_dropdown.setVisibility(View.VISIBLE);
@@ -674,6 +690,7 @@ public class CloudAnchorActivity extends AppCompatActivity
     private void renderPath(Long sourceId, Long destId) {
         // Need to pass source and destination anchorIds
         if (cloudAnchorMap.hasPath(sourceId, destId) && cloudAnchorMap.size() >= 2) {
+            System.out.println("It has a path");
 //      for(long i = 1; i < cloudAnchorMap.size(); i++){
 //        renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(i - 1), cloudAnchorMap.getAnchorNodeById(i));
 //
@@ -769,6 +786,8 @@ public class CloudAnchorActivity extends AppCompatActivity
         synchronized (anchorsLock) {
             cloudAnchor.setAnchorNode(arFragment.getArSceneView().getScene());
             cloudAnchorMap.add(cloudAnchor);
+            renderAnchorName(cloudAnchor);
+            createDestinationDropdown();
 
         }
     }
@@ -866,6 +885,8 @@ public class CloudAnchorActivity extends AppCompatActivity
             for(Long id: connectedAnchorIds){
                 //change weight to distance
                 cloudAnchorMap.createEdge(roomIdx, id, 1.0f);
+                AnchorNode anchorNode = cloudAnchorMap.getAnchorNodeById(id);
+                renderLineBetweenTwoAnchorNodes(anchorNode, cloudAnchor.getAnchorNode());
             }
 
 
@@ -932,4 +953,63 @@ public class CloudAnchorActivity extends AppCompatActivity
         }
         createSession();
     }
+
+    public void renderAnchorName(CloudAnchor cloudAnchor){
+
+        ViewRenderable.builder().setView(arFragment.getContext(), R.layout.anchor_name_display)
+                .build()
+                .thenAccept(
+                        viewRenderable -> {
+                            viewRenderable.setShadowCaster(false);
+                            viewRenderable.setShadowReceiver(false);
+                            Node nameNode = new Node();
+                            nameNode.setParent(cloudAnchor.getAnchorNode());
+                            nameNode.setRenderable(viewRenderable);
+                            nameNode.setLocalScale(new Vector3(1f, 1f, 1f));
+                            TextView textView = viewRenderable.getView().findViewById(R.id.anchor_name);
+                            textView.setText(cloudAnchor.getAnchorName());
+                            nameNode.setLocalPosition(new Vector3(0f, 1f, 0f));
+
+                        }).exceptionally(
+                throwable -> {
+                    Toast toast =
+                            Toast.makeText(this, "Unable to make anchor name display", Toast.LENGTH_LONG);
+                    toast.setGravity(Gravity.CENTER, 0, 0);
+                    toast.show();
+                    return null;
+                });
+    }
+
+    public Long findClosestAnchor(){
+        Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
+        Long minDistCloudAnchorId = null;
+        float minDistance = Float.MAX_VALUE;
+        for(Long cloudAnchorId: cloudAnchorMap.getAnchorIds()){
+            AnchorNode currAnchorNode = cloudAnchorMap.getAnchorNodeById(cloudAnchorId);
+            Pose anchorPose = currAnchorNode.getAnchor().getPose();
+
+            float dx = anchorPose.tx() - cameraPose.tx();
+            float dy = anchorPose.ty() - cameraPose.ty();
+            float dz = anchorPose.tz() - cameraPose.tz();
+
+            ///Compute the straight-line distance.
+            float distanceToAnchor = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if(distanceToAnchor < minDistance){
+                minDistance = distanceToAnchor;
+                minDistCloudAnchorId = cloudAnchorId;
+            }
+
+
+        }
+
+        CloudAnchor minDistCloudAnchor =  cloudAnchorMap.getCloudAnchorById(minDistCloudAnchorId);
+
+        Toast toast =
+                Toast.makeText(this, "Closest Anchor is: " + minDistCloudAnchor.getAnchorName(), Toast.LENGTH_LONG);
+        toast.setGravity(Gravity.CENTER, 0, 0);
+        toast.show();
+
+        return minDistCloudAnchorId;
+    }
+
 }

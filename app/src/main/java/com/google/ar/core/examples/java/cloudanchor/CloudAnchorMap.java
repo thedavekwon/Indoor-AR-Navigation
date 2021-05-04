@@ -170,4 +170,11 @@ public class CloudAnchorMap {
         return ids;
     }
 
+    public CloudAnchor getCloudAnchorById(Long id){
+        return map.get(id);
+    }
+
+    public Long getIdFromName(String name){
+        return nameToId.get(name);
+    }
 }
