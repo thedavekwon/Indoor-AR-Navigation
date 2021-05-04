@@ -754,7 +754,7 @@ public class CloudAnchorActivity extends AppCompatActivity
     void renderLineFromCameraToAnchor(AnchorNode anchorNode){
         Vector3 point1 = anchorNode.getWorldPosition();
         Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
-        Vector3 point2 = new Vector3(cameraPose.tx(), 0, cameraPose.tz());
+        Vector3 point2 = new Vector3(cameraPose.tx(), cameraPose.ty(), 0);
 
         final Vector3 difference = Vector3.subtract(point1, point2);
         final Vector3 directionFromTopToBottom = difference.normalized();
