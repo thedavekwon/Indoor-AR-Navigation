@@ -63,17 +63,23 @@ public class CloudAnchorMap {
 
         HashMap<Long, Long> parentTrack = new HashMap<>();
         parentTrack.put(sourceAnchorId, null);
-        HashMap<Long, Double> shortestPath = new HashMap<>();
+        HashMap<Long, Float> shortestPath = new HashMap<>();
 
         List<Long> path = new ArrayList<>();
 
         for (Long anchorId : anchors) {
             if (anchorId == sourceAnchorId)
-                shortestPath.put(anchorId, 0.0);
+                shortestPath.put(anchorId, 0.0f);
             else
-                shortestPath.put(anchorId, Double.POSITIVE_INFINITY);
+                shortestPath.put(anchorId, Float.POSITIVE_INFINITY);
         }
 
+        List<Edge> min = adjacency.get(sourceAnchorId.intValue());
+
+        for (Edge edge : min) {
+            shortestPath.put(edge.id, edge.weight);
+            parentTrack.put(edge.id, sourceAnchorId);
+        }
         while (true) {
             Long currentAnchor = closestNeighborUnvist(shortestPath, visited);
 
@@ -113,15 +119,15 @@ public class CloudAnchorMap {
         }
     }
 
-    public Long closestNeighborUnvist(HashMap<Long, Double> shortestPath, Set<Long> visited) {
-        double shortestDist = Double.POSITIVE_INFINITY;
+    public Long closestNeighborUnvist(HashMap<Long, Float> shortestPath, Set<Long> visited) {
+        float shortestDist = Float.POSITIVE_INFINITY;
         Long closestAnchor = null;
         for (Long anchor : anchors) {
             if (visited.contains(anchor))
                 continue;
 
-            double curDistance = shortestPath.get(anchor);
-            if (curDistance == Double.POSITIVE_INFINITY)
+            float curDistance = shortestPath.get(anchor);
+            if (curDistance == Float.POSITIVE_INFINITY)
                 continue;
 
             if (curDistance < shortestDist) {

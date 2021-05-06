@@ -106,6 +106,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -378,7 +379,7 @@ public class CloudAnchorActivity extends AppCompatActivity
                         dest_name[0] = parent.getItemAtPosition(position).toString();
                         if (dest_name[0] != null && !dest_name[0].equals(DEST_DROPDOWN_PROMPT)) {
                             long source_id = findClosestAnchor();
-                            renderLineFromCameraToAnchor( cloudAnchorMap.getAnchorNodeById(source_id));
+                            //renderLineFromCameraToAnchor( cloudAnchorMap.getAnchorNodeById(source_id));
                             System.out.println(dest_name[0]);
                             Toast.makeText(getApplicationContext(), "The option is:" + dest_name[0], Toast.LENGTH_SHORT).show();
                             long dest_id = cloudAnchorMap.getIdFromName(dest_name[0]);
@@ -691,28 +692,20 @@ public class CloudAnchorActivity extends AppCompatActivity
         // Need to pass source and destination anchorIds
         System.out.println("Source id: " + sourceId.toString() +", Dest id: " + destId.toString());
         System.out.println(cloudAnchorMap.getAdjacency());
-        if (cloudAnchorMap.hasPath(sourceId, destId) && cloudAnchorMap.size() >= 2) {
+        List<Long> path = cloudAnchorMap.findPath(sourceId, destId);
+
+
+        System.out.println("THE PATH: " + path.toString());
+        if (!path.isEmpty() && cloudAnchorMap.size() >= 2) {
             System.out.println("It has a path");
-//      for(long i = 1; i < cloudAnchorMap.size(); i++){
-//        renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(i - 1), cloudAnchorMap.getAnchorNodeById(i));
-//
-//        if(i == cloudAnchorMap.size() - 1){
-//          renderWaypoint(cloudAnchorMap.getAnchorNodeById(i));
-//        }
-//      }
-            // TEMPORARY
-            ArrayList<Long> anchorIds = cloudAnchorMap.getAnchorIds();
-            Log.i("CloudAnchorMap", anchorIds.toString());
-            for (int i = 0; i < anchorIds.size() - 1; i++) {
-                renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(anchorIds.get(i)), cloudAnchorMap.getAnchorNodeById(anchorIds.get(i + 1)));
+            Collections.reverse(path);
+            path.add(destId);
+            for (int i = 0; i < path.size()-1; i++) {
+                renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(path.get(i)), cloudAnchorMap.getAnchorNodeById(path.get(i + 1)));
             }
-            renderWaypoint(cloudAnchorMap.getAnchorNodeById(Collections.max(anchorIds)));
+            renderWaypoint(cloudAnchorMap.getAnchorNodeById(path.get(path.size()-1)));
         } else {
             System.out.println("No path found");
-        }
-        if (anchorNode != null) {
-            Log.i("CloudAnchorMap", anchorNode.getName());
-            renderTempAnchor(anchorNode);
         }
     }
 

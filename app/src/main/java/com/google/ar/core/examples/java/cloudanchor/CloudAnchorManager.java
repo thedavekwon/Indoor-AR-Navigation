@@ -87,7 +87,7 @@ class CloudAnchorManager {
      */
     synchronized void hostCloudAnchor(Anchor anchor, CloudAnchorHostListener listener) {
         Preconditions.checkNotNull(session, "The session cannot be null.");
-        Anchor newAnchor = session.hostCloudAnchor(anchor);
+        Anchor newAnchor = session.hostCloudAnchorWithTtl(anchor,365);
         if (pendingHostAnchors.isEmpty())
             pendingHostAnchors.put(newAnchor, listener);
     }
