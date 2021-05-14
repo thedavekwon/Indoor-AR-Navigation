@@ -1,4 +1,9 @@
 # Indoor AR Navigation
+Senior Project for the Cooper Union
 
-# Resources
-* [Get started with Cloud Anchors for Android](https://developers.google.com/ar/develop/java/cloud-anchors/cloud-anchors-quickstart-android)
+# Demo
+## Mapping Mode
+[![Mapping](https://img.youtube.com/vi/60qLrDsN4Us7/0.jpg)](https://www.youtube.com/watch?v=60qLrDsN4Us7)
+
+## Navigation Mode
+[![Navigation](https://img.youtube.com/vi/pZz1HxKylJo/0.jpg)](https://youtu.be/pZz1HxKylJo)

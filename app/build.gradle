@@ -7,7 +7,7 @@ android {
 
         // "AR Optional" apps must declare minSdkVersion >= 14.
         // "AR Required" apps must declare minSdkVersion >= 24.
-        minSdkVersion 24
+        minSdkVersion 26
         targetSdkVersion 29
         versionCode 1
         versionName '1.0'
@@ -40,6 +40,13 @@ dependencies {
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
 
     implementation 'com.google.guava:guava:27.0.1-android'
+    implementation project(path: ':core')
+    implementation project(path: ':ux')
+    implementation project(path: ':ux')
+
+    implementation "com.hootsuite.android:nachos:1.1.1"
+    implementation 'androidx.wear:wear:1.1.0'
+    compileOnly 'com.google.android.wearable:wearable:2.8.1'
 }
 
 apply plugin: 'com.google.gms.google-services'
