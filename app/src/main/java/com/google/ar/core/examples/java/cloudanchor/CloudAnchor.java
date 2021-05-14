@@ -20,23 +20,13 @@ public class CloudAnchor {
     private AnchorNode anchorNode;
     private Long anchorId;
     private String cloudAnchorId;
-    private boolean isDisplay = true;
-
     private Vector3 mappedTranslation = null;
 
-
-    public CloudAnchor(Long anchorId, String anchorName, String cloudAnchorId) {
-        this.anchorId = anchorId;
-        this.anchorName = anchorName;
-        this.cloudAnchorId = cloudAnchorId;
-        this.isDisplay = false;
-    }
 
     public CloudAnchor(Long anchorId, String anchorName, String cloudAnchorId, ArrayList<Float> mappedTranslation) {
         this.anchorId = anchorId;
         this.anchorName = anchorName;
         this.cloudAnchorId = cloudAnchorId;
-        this.isDisplay = false;
         this.mappedTranslation = new Vector3(mappedTranslation.get(0), mappedTranslation.get(1), mappedTranslation.get(2));
         Log.i("translation", this.mappedTranslation.toString());
     }
@@ -49,13 +39,6 @@ public class CloudAnchor {
         setAnchorNode(nodeParent);
     }
 
-    public CloudAnchor(Anchor anchor, String anchorName, Long anchorId, NodeParent nodeParent) {
-        this.anchorName = anchorName;
-        this.anchorId = anchorId;
-        this.cloudAnchorId = anchor.getCloudAnchorId();
-        this.anchor = anchor;
-        setAnchorNode(nodeParent);
-    }
 
     public CloudAnchor(Anchor anchor, String anchorName, String cloudAnchorId, Long anchorId, NodeParent nodeParent) {
         this.anchorName = anchorName;
@@ -65,10 +48,6 @@ public class CloudAnchor {
         setAnchorNode(nodeParent);
     }
 
-    public void setDisplayName(@Nullable String anchorName) {
-        this.anchorName = anchorName;
-    }
-
     public void setAnchor(Anchor anchor) {
         this.anchor = anchor;
     }
@@ -76,10 +55,6 @@ public class CloudAnchor {
     public void setAnchorNode(NodeParent nodeParent) {
         this.anchorNode = new AnchorNode(anchor);
         this.anchorNode.setParent(nodeParent);
-    }
-
-    public boolean getIsDisplay() {
-        return this.isDisplay;
     }
 
     public Anchor getAnchor() {

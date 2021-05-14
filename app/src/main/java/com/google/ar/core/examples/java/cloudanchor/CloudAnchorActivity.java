@@ -1,31 +1,10 @@
-/*
- * Copyright 2019 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.google.ar.core.examples.java.cloudanchor;
 
 import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
-import android.opengl.GLES20;
-import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.text.InputType;
 import android.util.ArraySet;
 import android.util.Log;
 import android.view.GestureDetector;
@@ -36,13 +15,11 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.GuardedBy;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.DialogFragment;
 
@@ -59,7 +36,6 @@ import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.Point;
 import com.google.ar.core.Point.OrientationMode;
-import com.google.ar.core.PointCloud;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
@@ -71,11 +47,6 @@ import com.google.ar.core.examples.java.common.helpers.DisplayRotationHelper;
 import com.google.ar.core.examples.java.common.helpers.FullScreenHelper;
 import com.google.ar.core.examples.java.common.helpers.SnackbarHelper;
 import com.google.ar.core.examples.java.common.helpers.TrackingStateHelper;
-import com.google.ar.core.examples.java.common.rendering.BackgroundRenderer;
-import com.google.ar.core.examples.java.common.rendering.ObjectRenderer;
-import com.google.ar.core.examples.java.common.rendering.ObjectRenderer.BlendMode;
-import com.google.ar.core.examples.java.common.rendering.PlaneRenderer;
-import com.google.ar.core.examples.java.common.rendering.PointCloudRenderer;
 import com.google.ar.core.exceptions.CameraNotAvailableException;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
@@ -84,9 +55,8 @@ import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.FrameTime;
 import com.google.ar.sceneform.HitTestResult;
 import com.google.ar.sceneform.Node;
-import com.google.ar.sceneform.NodeParent;
+
 import com.google.ar.sceneform.Scene;
-import com.google.ar.sceneform.SceneView;
 import com.google.ar.sceneform.math.Quaternion;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.Color;
@@ -97,20 +67,15 @@ import com.google.ar.sceneform.rendering.Renderable;
 import com.google.ar.sceneform.rendering.ShapeFactory;
 import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.ux.ArFragment;
-import com.google.ar.sceneform.ux.TransformableNode;
 import com.google.common.base.Preconditions;
 import com.google.firebase.database.DatabaseError;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 
 public class CloudAnchorActivity extends AppCompatActivity
         implements NoticeDialogListener {
@@ -690,7 +655,7 @@ public class CloudAnchorActivity extends AppCompatActivity
 
     private void renderPath(Long sourceId, Long destId) {
         // Need to pass source and destination anchorIds
-        System.out.println("Source id: " + sourceId.toString() +", Dest id: " + destId.toString());
+        System.out.println("Source id: " + sourceId.toString() + ", Dest id: " + destId.toString());
         System.out.println(cloudAnchorMap.getAdjacency());
         List<Long> path = cloudAnchorMap.findPath(sourceId, destId);
 
@@ -700,10 +665,10 @@ public class CloudAnchorActivity extends AppCompatActivity
             System.out.println("It has a path");
             Collections.reverse(path);
             path.add(destId);
-            for (int i = 0; i < path.size()-1; i++) {
+            for (int i = 0; i < path.size() - 1; i++) {
                 renderLineBetweenTwoAnchorNodes(cloudAnchorMap.getAnchorNodeById(path.get(i)), cloudAnchorMap.getAnchorNodeById(path.get(i + 1)));
             }
-            renderWaypoint(cloudAnchorMap.getAnchorNodeById(path.get(path.size()-1)));
+            renderWaypoint(cloudAnchorMap.getAnchorNodeById(path.get(path.size() - 1)));
         } else {
             System.out.println("No path found");
         }
@@ -747,7 +712,7 @@ public class CloudAnchorActivity extends AppCompatActivity
         }
     }
 
-    void renderLineFromCameraToAnchor(AnchorNode anchorNode){
+    void renderLineFromCameraToAnchor(AnchorNode anchorNode) {
         Vector3 point1 = anchorNode.getWorldPosition();
         Pose cameraPose = arFragment.getArSceneView().getArFrame().getCamera().getPose();
         Vector3 point2 = new Vector3(cameraPose.tx(), cameraPose.ty(), 0);

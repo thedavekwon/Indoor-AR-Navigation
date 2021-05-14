@@ -1,7 +1,6 @@
 package com.google.ar.core.examples.java.cloudanchor;
 
 import android.util.Log;
-import android.util.Pair;
 
 import com.google.ar.core.Anchor;
 import com.google.ar.sceneform.AnchorNode;
@@ -12,8 +11,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -177,17 +174,17 @@ public class CloudAnchorMap {
 
     public ArrayList<Long> getIdsFromNames(ArrayList<String> names) {
         ArrayList<Long> ids = new ArrayList<>();
-        for(String name : names){
+        for (String name : names) {
             ids.add(nameToId.get(name));
         }
         return ids;
     }
 
-    public CloudAnchor getCloudAnchorById(Long id){
+    public CloudAnchor getCloudAnchorById(Long id) {
         return map.get(id);
     }
 
-    public Long getIdFromName(String name){
+    public Long getIdFromName(String name) {
         return nameToId.get(name);
     }
 
@@ -210,7 +207,7 @@ public class CloudAnchorMap {
                 new ByteArrayInputStream(data));
         Object o = ois.readObject();
         ois.close();
-        adjacency = (List<List<Edge>>)o;
+        adjacency = (List<List<Edge>>) o;
         Log.i("adjacency", adjacency.toString());
         for (List<Edge> entry : adjacency) {
             Log.i("adjacency", String.valueOf(entry.toString()));
